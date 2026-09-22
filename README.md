@@ -1,2 +1,2 @@
 # Scanner
-Color_Nega_Scanner_(FIlGall_Fuck)
+Color_Nega_Scanner_(FIlmGall_Fuck)
