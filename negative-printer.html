@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>네거티브 인화기</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- 워터마크 글꼴: Outfit 700 (굵은 기하학적 산세리프). 워터마크에 쓰는 글자만 담은 작은 파일로 받음 -->
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@700&text=%20%2C-PSYabcdegimnorty&display=swap" rel="stylesheet">
 <style>
 /* ───────── 색 토큰: 색 판단을 방해하지 않도록 UI는 완전 무채색 ───────── */
 :root{
@@ -14,16 +17,20 @@
   --text:#1b1b1b; --muted:#666666; --viewer:#b3b3b3;
   --ink:#1b1b1b; --ink-text:#f3f3f3;
   --film:#1a1a1a; --film-text:#bdbdbd; --hole:#e7e7e7; --hist-bg:#151515;
+  color-scheme:light;   /* 선택 상자 목록·체크박스·스크롤 막대 같은 브라우저 기본 부품도 테마를 따르게 */
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
+/* 어두운 테마: 기기(운영체제)가 어두운 모드이면 항상 따름. 기기가 밝은 모드여도 이 페이지를 감싼 뷰어가
+   어두운 테마를 지정하면(data-theme="dark") 어둡게. 뷰어가 밝은 테마를 지정해도 기기가 어두우면 어둡게 둠 */
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
+  :root{
     --bg:#1e1e1e; --panel:#262626; --raise:#303030; --line:#3a3a3a; --line-strong:#5a5a5a;
     --text:#e6e6e6; --muted:#9a9a9a; --viewer:#2c2c2c;
     --ink:#e6e6e6; --ink-text:#1e1e1e;
     --film:#161616; --film-text:#a8a8a8; --hole:#2c2c2c; --hist-bg:#151515;
+    color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
@@ -31,6 +38,7 @@
   --text:#e6e6e6; --muted:#9a9a9a; --viewer:#2c2c2c;
   --ink:#e6e6e6; --ink-text:#1e1e1e;
   --film:#161616; --film-text:#a8a8a8; --hole:#2c2c2c; --hist-bg:#151515;
+  color-scheme:dark;
 }
 /* details 안쪽은 UA 섀도 트리의 slot을 거쳐 상속되므로 inherit 대신 직접 지정 */
 *,*::before,*::after{box-sizing:border-box}
@@ -59,6 +67,7 @@ button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto;font-size:15px;font-weight:600;letter-spacing:-.01em}
 .brand .chip{width:26px;height:18px;border-radius:2px;background:var(--base-chip,var(--line-strong));box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);transition:background .4s}
 .brand small{font-size:12px;font-weight:400;color:var(--muted)}
+.brand .ver{font:500 11px/1 "IBM Plex Sans Condensed","Arial Narrow",sans-serif;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:2px 5px;letter-spacing:.02em}
 
 .work{display:grid;grid-template-columns:118px minmax(0,1fr) 318px;min-height:0}
 
@@ -203,7 +212,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 <body>
 <div class="app">
   <header class="bar">
-    <div class="brand"><span class="chip" id="brandChip" title="현재 프레임의 필름 베이스 색"></span>네거티브 인화기 <small>컬러 네거티브 → 포지티브</small></div>
+    <div class="brand"><span class="chip" id="brandChip" title="현재 프레임의 필름 베이스 색"></span>네거티브 인화기 <small>컬러 네거티브 → 포지티브</small> <span class="ver" id="ver" title="버전 (변경 기록은 README의 12절)"></span></div>
     <button id="btnOpen" class="primary">스캔 열기</button>
     <input id="file" type="file" multiple accept="image/*,.tif,.tiff" class="sr" tabindex="-1">
     <label class="sr" for="fmt">내보내기 형식</label>
@@ -397,6 +406,11 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
    네거티브 인화기 — 컬러 네거티브 스캔을 포지티브로 변환
    모든 처리는 브라우저 안에서만 이루어집니다.
    ===================================================================== */
+
+// ───────── 버전 ─────────
+// 바뀐 점은 README.md의 '12. 변경 기록'에 버전별로 적음
+const VERSION = '2.8.3';
+document.getElementById('ver').textContent = 'v' + VERSION;
 
 // ───────── 기본 유틸 ─────────
 const $ = s => document.querySelector(s);
@@ -925,7 +939,6 @@ function* filmAreaG(P, s, baseAuto) {   // 단계마다 yield (백그라운드 �
 }
 // 순위용 지도: 세 채널 평균 log 투과율을 (2r+1)² 상자로 평균. 필름이 아닌 픽셀은 이웃 평균에서 빼서
 // 홀더·먼지 옆 픽셀이 극단값으로 끌려가지 않게 함 (값 합과 유효 개수를 같이 흐리고 나눔)
-function rankMap(P, s, M, r) { return runSync(rankMapG(P, s, M, r)); }
 function* rankMapG(P, s, M, r) {   // 단계마다 yield (백그라운드 썸네일용)
   const w = P.w, h = P.h, n = w * h, d = P.d, LL = logTable(s.input);
   const v = new Float32Array(n), c = new Float32Array(n);
@@ -1145,9 +1158,12 @@ const AI = {
   keyDown2: 1.7,      // 로우키 쪽 2차 항: 조금 어두운 장면(실내등)은 거의 그대로, 야경처럼 아주 어두운 장면만 더 어둡게 남김
   keyMin: 0.02, keyMax: 0.52,
   whiteOut: 0.95,     // 휘도 99.5%가 닿을 출력 (디지털처럼 깨끗한 흰색)
+  gamutKeep: 0.5,     // 색역 밖(밝고 선명한 색, 예: 밝은 파란 하늘): 휘도 유지(회색 쪽으로)와 색도 유지(전체를 낮춤)를 반씩.
+                      // 휘도만 지키면 하늘이 허옇게 바래고, 색도만 지키면 너무 어두워짐
   blackOut: 0.004,    // 명암 범위가 넓은(8스톱 이상) 장면의 그림자(0.5%)가 닿을 출력. 좁을수록 스톱당 2^0.7배씩 덜 깊게
-  blackRelax: 0.7,
-  nsMin: 1.45, nsMax: 1.7, // 그림자 쪽(키 아래) 곡선 기울기(로짓 대 로그 밝기) 범위. 하한은 카메라 곡선처럼 중간 톤 대비를 보장:
+  blackRelax: 0.7,    // 명암 범위가 blackDR보다 좁을 때 스톱마다 검은점 목표를 2^blackRelax배씩 올림 (최대 blackSpan스톱)
+  blackDR: 6, blackSpan: 4.5, // 기준 범위: 실제 네거티브는 필름의 발(toe)·스캔 때문에 맑은 날도 범위가 5스톱 남짓으로 잡히므로 8에서 낮춤
+  nsMin: 1.45, nsMax: 2.0, // 그림자 쪽(키 아래) 곡선 기울기(로짓 대 로그 밝기) 범위. 하한은 카메라 곡선처럼 중간 톤 대비를 보장:
                         // 명암 범위가 아주 넓어도 곡선을 늘어뜨리지 않고 양 끝을 잘라 냄 (넓은 범위의 그림자 세부는 baseComp가 일부 살림)
   nhMin: 1.5, nhMax: 2.0, // 밝은 쪽(키 위) 기울기 범위: 디지털카메라 곡선처럼 중간 톤 위가 가파르고 흰색 근처에서 어깨.
                         // 상한이 낮으면 하늘보다 어두운 흰 물체가 밝은 회색에 머물러 물 빠진 듯 보임
@@ -1158,7 +1174,8 @@ const AI = {
   vib: 0.25,          // 바이브런스 (덜 선명한 색일수록 더 올림)
   neutralLo: 0.05, neutralHi: 0.18, // 무채색 보호: 채도(HSV S)가 이 사이에서 채도 올림이 0 → 전부로 (회색에 남은 작은 캐스트를 키우지 않게)
   chromaTarget: 30,   // 채도 평준화 목표 (보통 밝기 픽셀의 75% 분위 Lab C*): 자연보다 조금 높게
-  satMin: 1.0, satMax: 1.3, // 필름이 낸 채도보다 내리지는 않음
+  satMin: 1.0, satMax: 1.3, // 필름이 낸 채도보다 내리지는 않음. 상한은 흐린 장면(안개) 기준
+  satMaxClear: 1.4,   // 맑은 장면(명암 범위 blackDR 이상)의 채도 상한: 채도가 낮게 스캔된 필름도 알맞게 살림
   castTCap: 0.5, castMCap: 0.35, // 밝기별 캐스트 보정 한도 (스톱)
   ambDead: 0.2, ambWarm: 0.4, ambWarmCap: 0.4, ambCool: 0.1, ambCoolCap: 0.1, // 조명 분위기 보존
   eps: 0.0005,        // 로그를 잴 때 더하는 작은 값 (검정 근처 잡음이 색을 흔들지 않게)
@@ -1323,7 +1340,10 @@ function aiTonePix(u0, u1, u2, t, out) {
   const k = t / Y;
   let r = u0 * k, g = u1 * k, b = u2 * k;
   const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
-  if (mx > 1) { const s = (1 - t) / (mx - t); r = t + (r - t) * s; g = t + (g - t) * s; b = t + (b - t) * s; }
+  if (mx > 1) {   // aiRect와 같은 색역 처리 (휘도 유지와 색도 유지를 섞고, 흰색 근처에서는 휘도 유지만)
+    const sc = (1 - t) / (mx - t), gk = t <= 0.6 ? AI.gamutKeep : t >= 0.9 ? 0 : AI.gamutKeep * (0.9 - t) / 0.3, q = gk / mx, p = 1 - gk;
+    r = (t + (r - t) * sc) * p + r * q; g = (t + (g - t) * sc) * p + g * q; b = (t + (b - t) * sc) * p + b * q;
+  }
   out[0] = r; out[1] = g; out[2] = b;
 }
 
@@ -1548,7 +1568,6 @@ function aiCastTable(mid, span, pT, pM, sT, sM, ambT) {
 }
 // 화이트밸런스 분석 전체: 3×3 평균한 로그값의 색도 → 구간별 후보 봉우리 → 구간 간 합의 → 장면 평균색과의 일치로 신뢰 조정.
 // 결과는 밝기(로그2 휘도)에 따른 캐스트 (τ, μ)의 2차식과 그 신뢰
-function aiCast(L0, L1, L2, LY, VI, nv, mw, mh, q01, q99, q10, q95) { return runSync(aiCastG(L0, L1, L2, LY, VI, nv, mw, mh, q01, q99, q10, q95)); }
 function* aiCastG(L0, L1, L2, LY, VI, nv, mw, mh, q01, q99, q10, q95) {   // 단계마다 yield (백그라운드 썸네일용)
   const C = AI.cast, n = mw * mh;
   const B0 = boxSum(L0, mw, mh, 1), B1 = boxSum(L1, mw, mh, 1), B2 = boxSum(L2, mw, mh, 1);
@@ -1723,7 +1742,7 @@ function* aiAnalyzeG(P, s, an, area, cache) {
   // ── 톤 곡선 (휘도): 키 → Ykey, 그림자(0.5%) → bT, 밝은 곳(99.5%) → whiteOut.
   //    bT는 명암 범위가 8스톱보다 좁을수록 스톱마다 2^0.7배 덜 깊게 (좁은 장면을 억지로 늘려 그림자 색이 묻히지 않게).
   //    기울기를 최대로 해도 그림자가 뜨면(안개·플레어) 선형 베일 β(키 기준)를 빼서 걷어 냄
-  const bT = AI.blackOut * Math.pow(2, AI.blackRelax * clamp(8 - DR, 0, 5)), lbo = Math.log(bT / (1 - bT));
+  const bT = AI.blackOut * Math.pow(2, AI.blackRelax * clamp(AI.blackDR - DR, 0, AI.blackSpan)), lbo = Math.log(bT / (1 - bT));
   const xlo0 = Math.pow(2, lLo - lAvg), xhi0 = Math.pow(2, lHi - lAvg);
   let beta = 0, ns = 1.3, nh = 1.3;
   for (let it = 0; it < 4; it++) {
@@ -1742,7 +1761,9 @@ function* aiAnalyzeG(P, s, an, area, cache) {
   const sv = new Float32Array(nv);
   const [ns2, nsk, nall] = aiColorStats(BL, VI, nv, 3, lAvg, beta, lk, ns, nh, sv);
   const C75 = ns2 > 50 ? quantiles(sv, ns2, 0, 150, 1500, [0.75])[0] : 0;
-  const sigma = C75 < 3 ? 1.05 : clamp(Math.pow(AI.chromaTarget / C75, 0.5), AI.satMin, AI.satMax);
+  // 채도 상한은 명암 범위로: 안개처럼 흐린 장면은 satMax, 맑은 장면은 satMaxClear까지 (사이는 선형)
+  const satCap = AI.satMax + (AI.satMaxClear - AI.satMax) * clamp((DR - (AI.blackDR - AI.blackSpan)) / AI.blackSpan, 0, 1);
+  const sigma = C75 < 3 ? 1.05 : clamp(Math.pow(AI.chromaTarget / C75, 0.5), AI.satMin, satCap);
   const skinFrac = nsk / Math.max(nall, 1);
 
   yield;
@@ -1806,7 +1827,7 @@ function buildPipeAi(s, an, ai) {
 function aiRect(src, W, H, x0, y0, pw, ph, pp, buf, out8) {
   const L0 = pp.lut[0], L1 = pp.lut[1], L2 = pp.lut[2], TY = pp.TY, F32 = AI_F32, I32 = AI_I32, TLAST = AIT_N - 1;
   const ai = pp.ai, D = ai.dmap, mw = ai.mw, mh = ai.mh, kx = mw / W, ky = mh / H;
-  const sat = pp.sat, vib = pp.vib, to8 = !!out8, NLO = AI.neutralLo, NINV = 1 / (AI.neutralHi - AI.neutralLo);
+  const sat = pp.sat, vib = pp.vib, to8 = !!out8, NLO = AI.neutralLo, NINV = 1 / (AI.neutralHi - AI.neutralLo), GKEEP = AI.gamutKeep;
   // 국소 대비 지도의 열 좌표(왼쪽 칸, 가중치)는 열마다 한 번, 행 보간은 행마다 한 번
   const XA = new Int32Array(pw), WX = new Float32Array(pw), Drow = new Float32Array(mw + 1);
   for (let k = 0; k < pw; k++) {
@@ -1842,7 +1863,12 @@ function aiRect(src, W, H, x0, y0, pw, ph, pp, buf, out8) {
           const k = t / Yu;
           r = u0 * k; g = u1 * k; b = u2 * k;
           const m1 = r > g ? (r > b ? r : b) : (g > b ? g : b);
-          if (m1 > 1) { const sc = (1 - t) / (m1 - t); r = t + (r - t) * sc; g = t + (g - t) * sc; b = t + (b - t) * sc; }
+          if (m1 > 1) {
+            // 색역 밖(밝고 선명한 색): 휘도를 지키며 회색 쪽으로 당기는 방식과 색도(채널 비)를 지키며 전체를 낮추는 방식을 섞음.
+            // 흰색에 가까울수록(t 0.6 → 0.9) 섞는 비율을 0으로: 잘린 하이라이트·필름 밖 빛은 카메라처럼 흰색으로 날림
+            const sc = (1 - t) / (m1 - t), gk = t <= 0.6 ? GKEEP : t >= 0.9 ? 0 : GKEEP * (0.9 - t) / 0.3, q = gk / m1, p = 1 - gk;
+            r = (t + (r - t) * sc) * p + r * q; g = (t + (g - t) * sc) * p + g * q; b = (t + (b - t) * sc) * p + b * q;
+          }
         }
       }
 
@@ -2452,6 +2478,11 @@ function drawView() {
   const r = viewRect(), neg = negHeld || tool === 'base';
   if (view.width !== r.w || view.height !== r.h) { view.width = r.w; view.height = r.h; fitView(); }
   vctx.putImageData(neg ? cur.negImg : cur.outImg, -r.x, -r.y, r.x, r.y, r.w, r.h);
+  if (!neg) {
+    // 저장될 영역(자르는 중이면 자르기 사각형)의 왼쪽 아래에 저장 결과와 같은 비율로
+    const c = tool === 'crop' ? cropPx(cur.prev, S()) : { x: r.x, y: r.y, w: r.w, h: r.h };
+    drawWatermark(vctx, c.x - r.x, c.y - r.y, c.w, c.h);
+  }
   if (tool === 'crop') drawCropOverlay();
 }
 function fitView() {
@@ -2864,6 +2895,70 @@ async function transform(kind) {
 }
 
 // ───────── 내보내기 ─────────
+// ───────── 워터마크 ─────────
+// 저장하는 사진(자르기·회전 뒤의 최종 화상) 왼쪽 아래에 두 줄로 새김. 가장자리에서 짧은 변의 6%만큼 안쪽에 두어,
+// 이 도구의 자르기로는 지워지지 않고(자르기 뒤 화상에 새기므로) 다른 프로그램에서 잘라 내려면 사진 가장자리까지 잃게 함.
+// 크기·여백은 모두 짧은 변에 비례하므로 미리보기와 저장 결과에서 같은 자리·같은 비율로 보임
+const WM_LINES = ['Scanned by Scannity,', '-Programmed by Yeony'];
+const WM = {
+  size: 0.025,        // 글자 크기 (짧은 변 대비)
+  inset: 0.06,        // 왼쪽·아래 가장자리에서 안쪽으로 (짧은 변 대비)
+  lead: 1.25,         // 줄 간격 (글자 크기 대비)
+  alpha: 0.85,        // 글자 불투명도
+  minPx: 11,          // 아주 작은 화상에서도 읽히는 최소 글자 크기 (px)
+};
+// 굵은 산세리프: Outfit 700(기하학적인 현대 산세리프). 받지 못하면 시스템의 굵은 산세리프로
+const wmFont = fs => `700 ${fs}px "Outfit", "Helvetica Neue", Arial, system-ui, sans-serif`;
+function wmLayout(w, h) {
+  const sh = Math.min(w, h), fs = Math.max(WM.minPx, sh * WM.size), inset = sh * WM.inset;
+  return { fs, x: inset, base: h - inset, lh: fs * WM.lead, blur: fs * 0.35, dy: fs * 0.04 };
+}
+// 캔버스 ctx의 (x0, y0)–(x0+w, y0+h) 사각형(최종 화상 영역)에 워터마크를 그림: 흰 글자 + 옅은 검은 그림자(밝은 곳에서도 읽히게)
+function drawWatermark(ctx, x0, y0, w, h) {
+  const L = wmLayout(w, h), n = WM_LINES.length;
+  ctx.save();
+  ctx.font = wmFont(L.fs); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = L.blur; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = L.dy;
+  ctx.fillStyle = `rgba(255,255,255,${WM.alpha})`;
+  WM_LINES.forEach((t, i) => ctx.fillText(t, x0 + L.x, y0 + L.base - (n - 1 - i) * L.lh));
+  ctx.restore();
+}
+// 저장용: 워터마크가 차지하는 사각형만 작은 캔버스에 그려 색과 불투명도를 읽어 둠 (띠 처리 중 실수 버퍼에 섞음)
+function wmMask(w, h) {
+  const L = wmLayout(w, h), n = WM_LINES.length, cv = document.createElement('canvas'), cx = cv.getContext('2d');
+  cx.font = wmFont(L.fs);
+  // 여유: 그림자 번짐 + 글자 모양이 글자 폭 밖으로 조금 삐져나오는 만큼
+  const tw = Math.max(...WM_LINES.map(t => cx.measureText(t).width)), pad = Math.ceil(L.blur * 2 + L.dy + 2 + L.fs * 0.2);
+  const bx0 = Math.max(0, Math.floor(L.x - pad)), by0 = Math.max(0, Math.floor(L.base - (n - 1) * L.lh - L.fs * 1.1 - pad));
+  const bx1 = Math.min(w, Math.ceil(L.x + tw + pad)), by1 = Math.min(h, Math.ceil(L.base + L.fs * 0.35 + pad));
+  const bw = bx1 - bx0, bh = by1 - by0;
+  if (bw <= 0 || bh <= 0) return null;
+  cv.width = bw; cv.height = bh;
+  drawWatermark(cx, -bx0, -by0, w, h);
+  const d = cx.getImageData(0, 0, bw, bh).data, A = new Float32Array(bw * bh), C = new Float32Array(bw * bh);
+  for (let i = 0, j = 0; i < bw * bh; i++, j += 4) { A[i] = d[j + 3] / 255; C[i] = d[j] / 255; }   // 흰 글자·검은 그림자만 있으므로 무채색 한 값
+  cv.width = cv.height = 0;
+  return { x0: bx0, y0: by0, w: bw, h: bh, A, C };
+}
+// 띠(y0부터 rh행, 너비 W, 부호화된 0–1 실수 RGB)에 워터마크를 섞음. 캔버스와 같은 '위에 덮기'(부호화 공간)
+function wmBlend(f, W, y0, rh, m) {
+  if (!m) return;
+  const ya = Math.max(y0, m.y0), yb = Math.min(y0 + rh, m.y0 + m.h);
+  for (let y = ya; y < yb; y++) {
+    const mo = (y - m.y0) * m.w, fo = ((y - y0) * W + m.x0) * 3;
+    for (let x = 0; x < m.w; x++) {
+      const a = m.A[mo + x];
+      if (a <= 0) continue;
+      const c = m.C[mo + x], k = fo + x * 3;
+      f[k] += (c - f[k]) * a; f[k + 1] += (c - f[k + 1]) * a; f[k + 2] += (c - f[k + 2]) * a;
+    }
+  }
+}
+// 글꼴이 준비된 뒤에 그려야 미리보기와 같은 모양이 됨 (막혀 있으면 기본 글꼴로, 1.5초 넘게 기다리지 않음)
+async function wmFontReady() {
+  try { await Promise.race([document.fonts.load(wmFont(16), WM_LINES.join('')), new Promise(r => setTimeout(r, 1500))]); } catch (e) { /* 기본 글꼴로 그림 */ }
+}
+
 function fullCrop(F, s) {
   const c = s.crop || { x: 0, y: 0, w: 1, h: 1 };
   const x = clamp(Math.round(c.x * F.w), 0, F.w - 1), y = clamp(Math.round(c.y * F.h), 0, F.h - 1);
@@ -2871,10 +2966,13 @@ function fullCrop(F, s) {
 }
 async function renderFull(F, s, pp, fmt, onProg) {
   const r = fullCrop(F, s), sh = sharpParams(s, 1, pp), STRIP = 128;
+  await wmFontReady();
+  const wm = wmMask(r.w, r.h);
   if (fmt === 'png16') {
     const u = new Uint16Array(r.w * r.h * 3);
     for (let y = 0; y < r.h; y += STRIP) {
       const rh = Math.min(STRIP, r.h - y), f = processRect(F.d, F.w, F.h, r.x, r.y + y, r.w, rh, pp, sh), o = y * r.w * 3;
+      wmBlend(f, r.w, y, rh, wm);
       for (let i = 0; i < f.length; i++) u[o + i] = f[i] * 65535 + 0.5;
       onProg(0.7 * (y + rh) / r.h); await tick();
     }
@@ -2884,6 +2982,7 @@ async function renderFull(F, s, pp, fmt, onProg) {
   const cx = cv.getContext('2d'), img = cx.createImageData(r.w, r.h), o = img.data;
   for (let y = 0; y < r.h; y += STRIP) {
     const rh = Math.min(STRIP, r.h - y), f = processRect(F.d, F.w, F.h, r.x, r.y + y, r.w, rh, pp, sh);
+    wmBlend(f, r.w, y, rh, wm);
     for (let i = 0, j = y * r.w * 4; i < f.length; i += 3, j += 4) { o[j] = f[i] * 255; o[j + 1] = f[i + 1] * 255; o[j + 2] = f[i + 2] * 255; o[j + 3] = 255; }
     onProg(0.85 * (y + rh) / r.h); await tick();
   }
@@ -3084,6 +3183,9 @@ function savePrefs() {
   }
   syncFmt(); syncAi();
 })();
+
+// 워터마크 글꼴을 미리 불러 두고, 준비되면 화면을 다시 그림 (캔버스 글자는 글꼴을 스스로 불러오지 않음)
+wmFontReady().then(() => { if (cur) drawView(); });
 
 // 편집한 프레임이 있으면 새로고침·창 닫기 전에 확인 (설정은 이 탭에만 있음)
 const edited = fr => Object.keys(DEF).some(k => JSON.stringify(fr.s[k]) !== JSON.stringify(DEF[k]));
