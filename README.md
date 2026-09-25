@@ -10,7 +10,7 @@
 컬러 네거티브 필름 스캔을 브라우저에서 바로 사진으로 바꾸는, 파일 하나짜리 도구입니다.
 설치할 것도, 올릴 곳도 없습니다. `negative-printer.html` 하나를 브라우저로 열면 됩니다.
 
-'https://scan.yeon.at/negative-printer.html'
+https://scan.yeon.at/negative-printer.html
 
 
 **목차**
