@@ -67,6 +67,11 @@ button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto;font-size:15px;font-weight:600;letter-spacing:-.01em}
 .brand .chip{width:26px;height:18px;border-radius:2px;background:var(--base-chip,var(--line-strong));box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);transition:background .4s}
 .brand small{font-size:12px;font-weight:400;color:var(--muted)}
+a.hbtn{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:30px;padding:0 12px;border:1px solid var(--line);border-radius:4px;background:var(--raise);color:var(--text);font:inherit;font-size:13px;text-decoration:none;white-space:nowrap}
+a.hbtn:hover{border-color:var(--line-strong)}
+.empty .help{font-size:13px;margin:12px 0 0}
+.empty .help a,details .more a{color:inherit}
+details .more{margin:8px 0 0;font-size:12.5px}
 .brand .ver{font:500 11px/1 "IBM Plex Sans Condensed","Arial Narrow",sans-serif;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:2px 5px;letter-spacing:.02em}
 
 .work{display:grid;grid-template-columns:118px minmax(0,1fr) 318px;min-height:0}
@@ -212,7 +217,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 <body>
 <div class="app">
   <header class="bar">
-    <div class="brand"><span class="chip" id="brandChip" title="현재 프레임의 필름 베이스 색"></span>Posity <small>컬러 네거티브 → 포지티브</small> <span class="ver" id="ver" title="버전 (변경 기록은 README의 12절)"></span></div>
+    <div class="brand"><span class="chip" id="brandChip" title="현재 프레임의 필름 베이스 색"></span>Posity <small>컬러 네거티브 → 포지티브</small> <span class="ver" id="ver" title="버전"></span></div>
     <button id="btnOpen" class="primary">스캔 열기</button>
     <input id="file" type="file" multiple accept="image/*,.tif,.tiff" class="sr" tabindex="-1">
     <label class="sr" for="fmt">내보내기 형식</label>
@@ -229,6 +234,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
     </select>
     <button id="btnExport" disabled>내보내기</button>
     <button id="btnExportAll" disabled title="모든 프레임을 각자의 설정으로 변환해 ZIP 하나로 저장">전체 ZIP</button>
+    <a class="hbtn" id="btnHelp" href="information.html#part-1" target="_blank" rel="noopener" title="사용법·원리·분석 정보 (? 키)">도움말</a>
   </header>
 
   <div class="work">
@@ -268,6 +274,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
           <strong>네거티브 스캔을 끌어다 놓으세요</strong>
           <p>TIFF 8·16비트(무압축, LZW, Deflate, PackBits), JPEG, PNG. 여러 장을 한 번에 넣으면 필름 스트립에 순서대로 들어갑니다.</p>
           <button id="btnOpen2">파일 선택</button>
+          <p class="help">처음이라면 <a href="information.html#s1-1" target="_blank" rel="noopener">도움말</a>을 먼저 보세요.</p>
         </div>
         <div class="loupe" id="loupe" hidden><canvas id="loupeCv" width="220" height="220"></canvas><b>1:1</b></div>
         <div class="busy" id="busy" hidden>
@@ -377,6 +384,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
           <li>노출·색온도·색조는 채널별 인화 노출(로그 영역)에 더해집니다. 확대기의 CMY 필터와 같은 원리입니다.</li>
           <li>가상 인화지의 S자 특성곡선(최대 농도 2.4)으로 반사율을 만든 뒤 채도·선명도를 거쳐 sRGB로 인코딩합니다.</li>
         </ol>
+        <p class="more"><a href="information.html#part-2" target="_blank" rel="noopener">도움말에서 자세히 보기</a></p>
       </details>
 
       <details class="sec how">
@@ -385,10 +393,11 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
           <li>기존 방식의 필름 해석(베이스 제거, 채널별 정규화)은 그대로 쓰고, 마지막 가상 인화지 대신 디지털카메라처럼 렌더링합니다. 인화지 곡선은 채널마다 걸려 하늘 같은 밝은 색은 바래고 그림자 색은 짙어지기 때문입니다.</li>
           <li>화이트밸런스: 밝기 구간마다 '무채색일 법한 곳'이 모이는 색을 찾고, 여러 구간이 매끄럽게 이어지는 색 틀어짐만 실제 캐스트로 인정해 밝기별로 뺍니다. 필름 층마다 특성곡선 모양이 달라 양 끝은 맞아도 중간 톤만 초록·마젠타로 남는 크로스오버까지 잡습니다. 하늘·나무 같은 큰 단색 면이 후보를 독차지하지 못하게 칸마다 표를 제한하고, 장면 전체의 평균색이 같은 방향일 때만 그만큼 믿습니다. 실내등·노을의 따뜻함은 카메라 자동 화이트밸런스처럼 조금 남깁니다.</li>
           <li>밝기: 중앙을 더 보고 하늘처럼 훨씬 밝은 곳은 가볍게 보는 측광으로 중간 밝기를 맞춥니다. 보통 장면은 모두 같은 밝기로, 눈밭·야경처럼 분명히 밝거나 어두운 장면만 그 분위기를 따릅니다.</li>
-          <li>톤: 밝기(휘도)에 S자 곡선을 걸고 세 채널을 같은 비율로 바꿔 하늘·피부 색은 그대로 두면서 깊은 검정, 깨끗한 흰색, 또렷한 대비를 줍니다. 색역을 넘는 밝은 색은 밝기를 지키며 채도만 줄이고, 안개처럼 뜬 그림자는 걷어 냅니다.</li>
+          <li>톤: 밝기(휘도)에 S자 곡선을 걸고 세 채널을 같은 비율로 바꿔 하늘·피부 색은 그대로 두면서 깊은 검정, 깨끗한 흰색, 또렷한 대비를 줍니다. 색역을 넘는 밝고 선명한 색은 밝기와 색을 반씩 지키며 줄여 파란 하늘이 바래지 않게 하고, 안개처럼 뜬 그림자는 걷어 냅니다.</li>
           <li>색: 흐린 색일수록 더 살리는 바이브런스와 채도 평준화로 조금 높은 정도의 채도를 맞춥니다. 피부색은 아끼고, 거의 회색인 곳은 올리지 않아 흰색·회색이 깨끗하게 남으며, 색역을 넘지 않게 합니다.</li>
           <li>맑게: 중간 크기 세부를 키우고, 필름 그레인을 재서 색 얼룩 잡음은 거의 없애고 밝기 그레인은 디지털 사진처럼 평탄한 면에서 매끈하게 줄이되 4분의 1은 남깁니다. 선명화는 남은 잡음보다 큰 윤곽에만 겁니다.</li>
         </ol>
+        <p class="more"><a href="information.html#s1-3" target="_blank" rel="noopener">도움말에서 자세히 보기</a></p>
       </details>
 
       <div class="foot">
@@ -409,7 +418,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 
 // ───────── 버전 ─────────
 // 바뀐 점은 README.md의 '12. 변경 기록'에 버전별로 적음
-const VERSION = '2.9.1';
+const VERSION = '2.10.0';
 document.getElementById('ver').textContent = 'v' + VERSION;
 
 // ───────── 기본 유틸 ─────────
@@ -2694,7 +2703,7 @@ async function queueThumbs() {
 // ───────── 도구 ─────────
 const TOUCH = matchMedia('(hover: none)').matches;
 const HINTS = {
-  none: TOUCH ? '원본 보기 버튼을 누르고 있으면 네거티브가 보입니다' : 'N 키: 원본 보기, Esc: 도구 해제',
+  none: TOUCH ? '원본 보기 버튼을 누르고 있으면 네거티브가 보입니다' : 'N 키: 원본 보기, Esc: 도구 해제, ?: 도움말',
   crop: '바깥에서 드래그해 새로 그리고, 변·모서리로 크기를, 안쪽을 끌어 위치를 바꿉니다. Enter로 완료',
   base: '프레임 사이의 노출되지 않은 주황색 필름을 클릭하세요',
   gray: '무채색이어야 할 곳(회색 벽, 흰 종이, 아스팔트)을 클릭하세요',
@@ -3132,6 +3141,7 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'n' || e.key === 'N' || e.key === 'ㅜ') && !e.repeat) setNeg(true);
   else if (e.key === 'Escape') setTool('none');
   else if (e.key === 'Enter' && tool === 'crop') setTool('none');
+  else if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) window.open('information.html#part-1', '_blank', 'noopener');
 });
 document.addEventListener('keyup', e => { if (e.key === 'n' || e.key === 'N' || e.key === 'ㅜ') setNeg(false); });
 
