@@ -1,0 +1,3206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Posity — 컬러 네거티브 변환기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- 워터마크 글꼴: Outfit 700 (굵은 기하학적 산세리프). 워터마크에 쓰는 글자만 담은 작은 파일로 받음 -->
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@700&text=%20%2C-PSYabcdegimnorsty&display=swap" rel="stylesheet">
+<style>
+/* ───────── 색 토큰: 색 판단을 방해하지 않도록 UI는 완전 무채색 ───────── */
+:root{
+  --bg:#e7e7e7; --panel:#f3f3f3; --raise:#e4e4e4; --line:#cdcdcd; --line-strong:#a9a9a9;
+  --text:#1b1b1b; --muted:#666666; --viewer:#b3b3b3;
+  --ink:#1b1b1b; --ink-text:#f3f3f3;
+  --film:#1a1a1a; --film-text:#bdbdbd; --hole:#e7e7e7; --hist-bg:#151515;
+  color-scheme:light;   /* 선택 상자 목록·체크박스·스크롤 막대 같은 브라우저 기본 부품도 테마를 따르게 */
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+/* 어두운 테마: 기기(운영체제)가 어두운 모드이면 항상 따름. 기기가 밝은 모드여도 이 페이지를 감싼 뷰어가
+   어두운 테마를 지정하면(data-theme="dark") 어둡게. 뷰어가 밝은 테마를 지정해도 기기가 어두우면 어둡게 둠 */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1e1e1e; --panel:#262626; --raise:#303030; --line:#3a3a3a; --line-strong:#5a5a5a;
+    --text:#e6e6e6; --muted:#9a9a9a; --viewer:#2c2c2c;
+    --ink:#e6e6e6; --ink-text:#1e1e1e;
+    --film:#161616; --film-text:#a8a8a8; --hole:#2c2c2c; --hist-bg:#151515;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1e1e1e; --panel:#262626; --raise:#303030; --line:#3a3a3a; --line-strong:#5a5a5a;
+  --text:#e6e6e6; --muted:#9a9a9a; --viewer:#2c2c2c;
+  --ink:#e6e6e6; --ink-text:#1e1e1e;
+  --film:#161616; --film-text:#a8a8a8; --hole:#2c2c2c; --hist-bg:#151515;
+  color-scheme:dark;
+}
+/* details 안쪽은 UA 섀도 트리의 slot을 거쳐 상속되므로 inherit 대신 직접 지정 */
+*,*::before,*::after{box-sizing:border-box}
+/* hidden 속성이 display 지정에 묻히지 않도록 */
+[hidden]{display:none!important}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:13px/1.45 "IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+}
+button,select{
+  font:inherit;color:var(--text);background:var(--raise);
+  border:1px solid var(--line);border-radius:4px;padding:5px 10px;cursor:pointer;
+}
+button:hover:not(:disabled),select:hover:not(:disabled){border-color:var(--line-strong)}
+button[aria-pressed="true"],button.primary{background:var(--ink);color:var(--ink-text);border-color:var(--ink)}
+button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr)}
+
+/* 상단 바 */
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand .chip{width:26px;height:18px;border-radius:2px;background:var(--base-chip,var(--line-strong));box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);transition:background .4s}
+.brand small{font-size:12px;font-weight:400;color:var(--muted)}
+.brand .ver{font:500 11px/1 "IBM Plex Sans Condensed","Arial Narrow",sans-serif;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:2px 5px;letter-spacing:.02em}
+
+.work{display:grid;grid-template-columns:118px minmax(0,1fr) 318px;min-height:0}
+
+/* 필름 스트립: 스프로킷 구멍은 배경으로 그림 */
+.strip{
+  background-color:var(--film);color:var(--film-text);overflow-y:auto;padding:10px 22px;
+  background-image:linear-gradient(to bottom,var(--hole) 0 10px,transparent 10px 22px),linear-gradient(to bottom,var(--hole) 0 10px,transparent 10px 22px);
+  background-size:8px 22px,8px 22px;background-repeat:repeat-y;
+  background-position:7px 6px,calc(100% - 7px) 6px;background-attachment:local;
+}
+.strip ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.frame{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;border-radius:0}
+.frame .edge{display:block;font:600 12px/1 "IBM Plex Sans Condensed","Arial Narrow",sans-serif;letter-spacing:.02em;margin-bottom:4px;opacity:.8}
+.frame .pic{display:grid;place-items:center;aspect-ratio:1;background:#0c0c0c;outline:1px solid #2b2b2b;overflow:hidden}
+.frame .pic img{width:100%;height:100%;object-fit:contain;display:block}
+.frame .pic span{font-size:11px;color:#6f6f6f;padding:4px;text-align:center;word-break:break-all}
+.frame .fname{display:block;font-size:11px;margin-top:4px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frame[aria-current="true"] .pic{outline:2px solid #ececec}
+.frame[aria-current="true"] .edge{opacity:1}
+.strip li{position:relative}
+.fdel{position:absolute;top:-3px;right:0;width:20px;height:20px;padding:0;border-radius:3px;font-size:14px;line-height:1;background:rgba(0,0,0,.6);color:#ddd;border:1px solid #444;opacity:0}
+.strip li:hover .fdel,.fdel:focus-visible{opacity:1}
+@media (hover: none){ .fdel{opacity:.85} }
+.strip .none{font-size:11px;color:#6f6f6f;line-height:1.5}
+
+/* 작업 영역 */
+.stage{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-width:0;min-height:0;background:var(--viewer)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.toolbar .sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.viewer{position:relative;display:grid;place-items:center;overflow:hidden;min-height:0;touch-action:manipulation}
+.viewer.cropping{touch-action:none}
+.viewer.drag{outline:2px dashed var(--text);outline-offset:-10px}
+#view{display:block;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+#view.pick{cursor:crosshair}
+#view.crop{cursor:crosshair}
+.empty{max-width:40ch;text-align:center;color:var(--muted);padding:24px}
+.empty strong{display:block;color:var(--text);font-size:18px;font-weight:600;margin-bottom:8px;letter-spacing:-.01em}
+.empty p{margin:0 0 14px}
+.status{display:flex;justify-content:space-between;gap:16px;padding:6px 12px;font-size:12px;color:var(--muted);background:var(--panel);border-top:1px solid var(--line)}
+.status span:last-child{text-align:right}
+
+.loupe{position:absolute;right:14px;bottom:14px;width:220px;height:220px;background:#000;border:1px solid var(--line-strong)}
+.loupe canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+.loupe b{position:absolute;left:7px;top:5px;font-size:11px;font-weight:500;color:#fff;mix-blend-mode:difference}
+
+.busy{position:absolute;inset:0;display:grid;place-content:center;gap:10px;text-align:center;background:color-mix(in srgb,var(--viewer) 82%,transparent)}
+.busy .bt{font-weight:600}
+.busy .bd{font-size:12px;color:var(--muted);max-width:40ch}
+.busy .track{width:240px;height:3px;background:var(--line);justify-self:center}
+.busy .fill{height:100%;width:0;background:var(--text)}
+.busy button{justify-self:center;margin-top:2px}
+
+/* 오른쪽 패널 */
+.panel{overflow-y:auto;background:var(--panel);border-left:1px solid var(--line);padding:12px 16px 24px}
+.hist{position:relative;height:96px;background:var(--hist-bg);border-radius:3px}
+.hist canvas{width:100%;height:100%;display:block}
+.sec{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.sec > summary{font-weight:600;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+.sec > summary::-webkit-details-marker{display:none}
+.sec > summary::after{content:"＋";color:var(--muted);font-weight:400}
+.sec[open] > summary::after{content:"－"}
+.sec > summary + *{margin-top:6px}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:0 8px;margin:9px 0 2px}
+.ctl label{color:var(--muted);user-select:none}
+.ctl output{font-size:12px}
+.ctl input{grid-column:1/-1;width:100%}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.field{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;margin:9px 0}
+.field span{color:var(--muted)}
+.field select{width:100%;min-width:0;text-overflow:ellipsis}
+.base{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:center;margin:4px 0}
+.base .sw{width:44px;height:30px;border-radius:2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);background:var(--raise)}
+.base .v{font-size:12px;line-height:1.4}
+.base .v em{font-style:normal;color:var(--muted)}
+.dens{display:grid;grid-template-columns:auto 1fr;gap:1px 10px;font-size:12px;margin:8px 0;color:var(--muted)}
+.dens b{font-weight:500;color:var(--text)}
+.note{font-size:12px;color:var(--muted);margin:6px 0}
+.how ol{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:12px}
+.how li{margin:4px 0}
+.foot{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap}
+.foot button{flex:1}
+
+/* Ai+ 스위치 */
+.aibox{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--raise)}
+.aisw{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.aisw input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.aisw .sw{position:relative;flex:none;width:34px;height:20px;border-radius:10px;background:var(--line-strong);transition:background .15s}
+.aisw .sw::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--panel);transition:transform .15s}
+.aisw input:checked + .sw{background:var(--ink)}
+.aisw input:checked + .sw::after{transform:translateX(14px)}
+.aisw input:focus-visible + .sw{outline:2px solid var(--text);outline-offset:2px}
+.aisw b{font:600 16px/1 "IBM Plex Sans Condensed","Arial Narrow",sans-serif;letter-spacing:.02em}
+.aist{margin-left:auto;font-size:12px;color:var(--muted);text-align:right}
+.aiinfo{margin-top:8px;display:grid;gap:6px}
+.aiscene{font-size:12px;line-height:1.5}
+.aiskip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer}
+.aiinfo .note{margin:0}
+
+/* 슬라이더: 얇은 선 + 페이더 손잡이 */
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;height:18px;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line-strong)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:16px;margin-top:-7px;border-radius:2px;background:var(--text);border:0}
+input[type=range]::-moz-range-track{height:2px;background:var(--line-strong)}
+input[type=range]::-moz-range-thumb{width:9px;height:16px;border-radius:2px;background:var(--text);border:0}
+input[type=range]:disabled{opacity:.4;cursor:not-allowed}
+.ctl.temp input::-webkit-slider-runnable-track{background:linear-gradient(90deg,#5b82d6,#9a9a9a,#d7a64a)}
+.ctl.temp input::-moz-range-track{background:linear-gradient(90deg,#5b82d6,#9a9a9a,#d7a64a)}
+.ctl.tint input::-webkit-slider-runnable-track{background:linear-gradient(90deg,#55ad5e,#9a9a9a,#c05cbf)}
+.ctl.tint input::-moz-range-track{background:linear-gradient(90deg,#55ad5e,#9a9a9a,#c05cbf)}
+
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--ink-text);padding:8px 14px;border-radius:4px;font-size:12px;max-width:min(90vw,520px);opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+.toast.act.on{pointer-events:auto}
+.toast button{margin-left:10px;padding:2px 9px;background:transparent;color:inherit;border-color:currentColor;font-size:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+@media (max-width: 900px){
+  html,body,.app{height:auto}
+  .work{grid-template-columns:1fr;grid-template-rows:auto 62vh auto}
+  .strip{
+    padding:22px 10px;overflow-x:auto;overflow-y:hidden;
+    background-image:linear-gradient(to right,var(--hole) 0 10px,transparent 10px 22px),linear-gradient(to right,var(--hole) 0 10px,transparent 10px 22px);
+    background-size:22px 8px,22px 8px;background-repeat:repeat-x;
+    background-position:6px 7px,6px calc(100% - 7px);
+  }
+  .strip ol{flex-direction:row}
+  .strip li{flex:0 0 84px}
+  .panel{border-left:0;border-top:1px solid var(--line)}
+  .loupe{width:150px;height:150px}
+  .toolbar .sep{display:none}
+}
+/* 손가락 조작: 슬라이더 손잡이를 키움 */
+@media (pointer: coarse){
+  input[type=range]{height:30px}
+  input[type=range]::-webkit-slider-thumb{width:16px;height:26px;margin-top:-12px}
+  input[type=range]::-moz-range-thumb{width:16px;height:26px}
+}
+[data-act="neg"]{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><span class="chip" id="brandChip" title="현재 프레임의 필름 베이스 색"></span>Posity <small>컬러 네거티브 → 포지티브</small> <span class="ver" id="ver" title="버전 (변경 기록은 README의 12절)"></span></div>
+    <button id="btnOpen" class="primary">스캔 열기</button>
+    <input id="file" type="file" multiple accept="image/*,.tif,.tiff" class="sr" tabindex="-1">
+    <label class="sr" for="fmt">내보내기 형식</label>
+    <select id="fmt" disabled>
+      <option value="jpg">JPEG (8비트)</option>
+      <option value="png8">PNG (8비트)</option>
+      <option value="png16">PNG (16비트)</option>
+    </select>
+    <label class="sr" for="jq">JPEG 품질</label>
+    <select id="jq" disabled title="JPEG 품질: 높을수록 화질 손실이 적고 파일이 큼">
+      <option value="0.92">품질 92</option>
+      <option value="0.95" selected>품질 95</option>
+      <option value="1">품질 100</option>
+    </select>
+    <button id="btnExport" disabled>내보내기</button>
+    <button id="btnExportAll" disabled title="모든 프레임을 각자의 설정으로 변환해 ZIP 하나로 저장">전체 ZIP</button>
+  </header>
+
+  <div class="work">
+    <nav class="strip" aria-label="필름 스트립">
+      <ol id="frames"><li class="none">불러온 프레임이 여기 필름처럼 쌓입니다.</li></ol>
+    </nav>
+
+    <section class="stage">
+      <div class="toolbar" role="toolbar" aria-label="이미지 도구">
+        <button data-act="rotL" title="반시계 방향 90° 회전" disabled>↺ 90°</button>
+        <button data-act="rotR" title="시계 방향 90° 회전" disabled>↻ 90°</button>
+        <button data-act="flip" title="좌우 반전 (유제면 방향 보정)" disabled>좌우 반전</button>
+        <span class="sep"></span>
+        <button data-act="crop" aria-pressed="false" disabled>자르기</button>
+        <select id="ratio" hidden aria-label="자르기 비율">
+          <option value="free">자유 비율</option>
+          <option value="1.5">3:2 (135, 6×9)</option>
+          <option value="1.3333">4:3 (6×4.5)</option>
+          <option value="1">1:1 (6×6)</option>
+          <option value="1.25">5:4 (6×7)</option>
+          <option value="2.7083">65:24 (파노라마)</option>
+        </select>
+        <button data-act="cropAuto" hidden title="홀더와 프레임 사이 베이스를 걷어내고 화상 영역에 맞춤">자동 맞춤</button>
+        <button data-act="cropClear" hidden>자르기 해제</button>
+        <button data-act="cropDone" hidden class="primary">완료</button>
+        <span class="sep"></span>
+        <button data-act="base" aria-pressed="false" title="필름 베이스(프레임 사이 노출되지 않은 부분) 찍기" disabled>베이스 찍기</button>
+        <button data-act="gray" aria-pressed="false" title="무채색이어야 할 곳을 찍어 색 균형 맞추기" disabled>회색 찍기</button>
+        <span class="sep"></span>
+        <button data-act="neg" title="누르고 있는 동안 원본 네거티브 표시 (N 키)" disabled>원본 보기</button>
+        <button data-act="loupe" aria-pressed="false" title="원본 해상도로 확대해 선명도·그레인 확인" disabled>1:1 확대경</button>
+      </div>
+
+      <div class="viewer" id="viewer">
+        <canvas id="view" hidden></canvas>
+        <div class="empty" id="empty">
+          <strong>네거티브 스캔을 끌어다 놓으세요</strong>
+          <p>TIFF 8·16비트(무압축, LZW, Deflate, PackBits), JPEG, PNG. 여러 장을 한 번에 넣으면 필름 스트립에 순서대로 들어갑니다.</p>
+          <button id="btnOpen2">파일 선택</button>
+        </div>
+        <div class="loupe" id="loupe" hidden><canvas id="loupeCv" width="220" height="220"></canvas><b>1:1</b></div>
+        <div class="busy" id="busy" hidden>
+          <div class="bt" id="busyT">처리 중</div>
+          <div class="bd" id="busyD"></div>
+          <div class="track"><div class="fill" id="busyF"></div></div>
+          <button id="busyCancel" type="button" hidden>취소</button>
+        </div>
+      </div>
+
+      <div class="status"><span id="stInfo">파일 없음</span><span id="stHint"></span></div>
+    </section>
+
+    <aside class="panel" aria-label="변환 설정">
+      <div class="aibox">
+        <label class="aisw" id="aiSw" title="장면을 인식하여 사진을 찍은 상황에 가장 근접하게 포지티브로 변환하고, 맑고 깨끗하게 보정합니다. 모든 장면에 적용을 보장하지 않습니다. 제대로 적용되지 않는다면 이 기능을 끄세요. ">
+          <input type="checkbox" id="aiOn" aria-describedby="aiDesc">
+          <span class="sw" aria-hidden="true"></span>
+          <b>Ai+</b>
+          <span class="aist" id="aiState">꺼짐 · 기존 방식</span>
+        </label>
+        <span class="sr" id="aiDesc">장면을 인식하여 사진을 찍은 상황에 가장 근접하게 포지티브로 변환하고, 맑고 깨끗하게 보정합니다. 모든 장면에 적용을 보장하지 않습니다. 제대로 적용되지 않는다면 이 기능을 끄세요. </span>
+        <div class="aiinfo" id="aiInfo" hidden>
+          <span class="aiscene" id="aiScene"></span>
+          <label class="aiskip"><input type="checkbox" id="aiSkip" disabled> 이 프레임만 기존 방식으로</label>
+          <p class="note" id="aiNote" hidden>슬라이더는 Ai+ 결과에 더하거나 빼는 미세 조정입니다. 모두 0이면 Ai+ 그대로입니다.</p>
+        </div>
+      </div>
+
+      <div class="hist"><canvas id="hist"></canvas></div>
+
+      <details class="sec" open>
+        <summary>필름 베이스</summary>
+        <div class="base">
+          <div class="sw" id="baseSw"></div>
+          <div class="v"><span id="baseVal">—</span><br><em id="baseSrc">스캔을 열면 자동 감지합니다</em></div>
+        </div>
+        <div class="row">
+          <button data-act="base" aria-pressed="false" disabled>스포이트로 지정</button>
+          <button id="btnBaseAuto" disabled>자동 감지로</button>
+        </div>
+        <label class="field"><span>스캔 인코딩</span>
+          <select id="selInput" disabled>
+            <option value="srgb">sRGB 감마 (스캐너 JPEG·TIFF 대부분)</option>
+            <option value="linear">선형 (RAW에서 뽑은 선형 TIFF)</option>
+            <option value="g22">감마 2.2</option>
+          </select>
+        </label>
+        <label class="field"><span>검은점 기준</span>
+          <select id="selBlack" disabled>
+            <option value="pct">자동 (그림자 백분위)</option>
+            <option value="base">필름 베이스 (무노광 = 검정)</option>
+          </select>
+        </label>
+        <label class="field"><span>채널 정규화</span>
+          <select id="selChan" disabled>
+            <option value="per">채널별 (층별 감마 차이 자동 보정)</option>
+            <option value="linked">연동 (필름 고유 발색 유지)</option>
+          </select>
+        </label>
+        <div class="dens" id="dens" hidden>
+          <span>밀도 범위</span><b id="densRGB">—</b>
+          <span>장면 범위</span><b id="densStops">—</b>
+          <span id="exclL" hidden>분석 제외</span><b id="excl" hidden>—</b>
+        </div>
+        <p class="note" id="baseNote" hidden>지금 모드(자동 검은점, 채널별)에서는 베이스 값이 정규화로 상쇄되어 톤·색에는 영향을 주지 않고, 홀더·빛샘을 가려내는 데만 쓰입니다. 베이스를 찍으면 검은점 기준이 필름 베이스로 바뀝니다.</p>
+      </details>
+
+      <details class="sec" open>
+        <summary>톤</summary>
+        <div class="ctl" data-s="exposure"></div>
+        <div class="ctl" data-s="contrast"></div>
+        <div class="ctl" data-s="black"></div>
+        <div class="ctl" data-s="white"></div>
+      </details>
+
+      <details class="sec" open>
+        <summary>색</summary>
+        <div class="ctl temp" data-s="temp"></div>
+        <div class="ctl tint" data-s="tint"></div>
+        <div class="ctl" data-s="sat"></div>
+        <div class="row"><button data-act="gray" aria-pressed="false" disabled>회색 스포이트</button></div>
+      </details>
+
+      <details class="sec">
+        <summary>선명도</summary>
+        <div class="ctl" data-s="sharpAmt"></div>
+        <div class="ctl" data-s="sharpRad"></div>
+        <div class="ctl" data-s="sharpThr"></div>
+        <p class="note">미리보기는 축소본이라 선명도는 1:1 확대경에서 확인하세요. 임계값을 올리면 필름 그레인이 덜 강조됩니다.</p>
+      </details>
+
+      <details class="sec">
+        <summary>자동 분석</summary>
+        <div class="ctl" data-s="clipBlack"></div>
+        <div class="ctl" data-s="clipWhite"></div>
+        <div class="ctl" data-s="margin"></div>
+        <p class="note">자르기 영역에서 테두리 여백을 뺀 부분으로 채널별 그림자·하이라이트 밀도를 찾습니다. 홀더나 빛샘이 들어가면 여백을 늘리세요.</p>
+      </details>
+
+      <details class="sec how">
+        <summary>변환 원리</summary>
+        <ol>
+          <li>스캔값을 인코딩에 맞춰 선형 투과율 T로 되돌립니다.</li>
+          <li>필름 베이스 T<sub>b</sub>로 나눠 오렌지 마스크를 걷어내고 밀도 D = −log₁₀(T/T<sub>b</sub>)로 바꿉니다.</li>
+          <li>채널마다 그림자·하이라이트 밀도를 0–1로 정규화합니다. 감광층마다 다른 감마가 여기서 맞춰집니다.</li>
+          <li>노출·색온도·색조는 채널별 인화 노출(로그 영역)에 더해집니다. 확대기의 CMY 필터와 같은 원리입니다.</li>
+          <li>가상 인화지의 S자 특성곡선(최대 농도 2.4)으로 반사율을 만든 뒤 채도·선명도를 거쳐 sRGB로 인코딩합니다.</li>
+        </ol>
+      </details>
+
+      <details class="sec how">
+        <summary>Ai+ 원리</summary>
+        <ol>
+          <li>기존 방식의 필름 해석(베이스 제거, 채널별 정규화)은 그대로 쓰고, 마지막 가상 인화지 대신 디지털카메라처럼 렌더링합니다. 인화지 곡선은 채널마다 걸려 하늘 같은 밝은 색은 바래고 그림자 색은 짙어지기 때문입니다.</li>
+          <li>화이트밸런스: 밝기 구간마다 '무채색일 법한 곳'이 모이는 색을 찾고, 여러 구간이 매끄럽게 이어지는 색 틀어짐만 실제 캐스트로 인정해 밝기별로 뺍니다. 필름 층마다 특성곡선 모양이 달라 양 끝은 맞아도 중간 톤만 초록·마젠타로 남는 크로스오버까지 잡습니다. 하늘·나무 같은 큰 단색 면이 후보를 독차지하지 못하게 칸마다 표를 제한하고, 장면 전체의 평균색이 같은 방향일 때만 그만큼 믿습니다. 실내등·노을의 따뜻함은 카메라 자동 화이트밸런스처럼 조금 남깁니다.</li>
+          <li>밝기: 중앙을 더 보고 하늘처럼 훨씬 밝은 곳은 가볍게 보는 측광으로 중간 밝기를 맞춥니다. 보통 장면은 모두 같은 밝기로, 눈밭·야경처럼 분명히 밝거나 어두운 장면만 그 분위기를 따릅니다.</li>
+          <li>톤: 밝기(휘도)에 S자 곡선을 걸고 세 채널을 같은 비율로 바꿔 하늘·피부 색은 그대로 두면서 깊은 검정, 깨끗한 흰색, 또렷한 대비를 줍니다. 색역을 넘는 밝은 색은 밝기를 지키며 채도만 줄이고, 안개처럼 뜬 그림자는 걷어 냅니다.</li>
+          <li>색: 흐린 색일수록 더 살리는 바이브런스와 채도 평준화로 조금 높은 정도의 채도를 맞춥니다. 피부색은 아끼고, 거의 회색인 곳은 올리지 않아 흰색·회색이 깨끗하게 남으며, 색역을 넘지 않게 합니다.</li>
+          <li>맑게: 중간 크기 세부를 키우고, 필름 그레인을 재서 색 얼룩 잡음은 거의 없애고 밝기 그레인은 디지털 사진처럼 평탄한 면에서 매끈하게 줄이되 4분의 1은 남깁니다. 선명화는 남은 잡음보다 큰 윤곽에만 겁니다.</li>
+        </ol>
+      </details>
+
+      <div class="foot">
+        <button id="btnReset" disabled>보정 초기화</button>
+        <button id="btnSync" disabled title="자르기를 뺀 현재 설정을 모든 프레임에 복사">모든 프레임에 적용</button>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Posity — 컬러 네거티브 스캔을 포지티브로 변환
+   모든 처리는 브라우저 안에서만 이루어집니다.
+   ===================================================================== */
+
+// ───────── 버전 ─────────
+// 바뀐 점은 README.md의 '12. 변경 기록'에 버전별로 적음
+const VERSION = '2.9.1';
+document.getElementById('ver').textContent = 'v' + VERSION;
+
+// ───────── 기본 유틸 ─────────
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const LOG10_2 = Math.log10(2);
+const tick = () => new Promise(r => setTimeout(r, 0));
+// 이벤트 루프에 한 번 양보 (MessageChannel: setTimeout의 4ms 하한 없이 쌓인 입력·그리기를 먼저 처리하게)
+const yieldTask = (() => {
+  const ch = new MessageChannel(), q = [];
+  ch.port1.onmessage = () => { const r = q.shift(); if (r) r(); };
+  return () => new Promise(r => { q.push(r); ch.port2.postMessage(0); });
+})();
+// 오래 걸리는 계산을 생성기로 쓰고 중간중간 yield: 보통은 끝까지 한 번에(runSync), 백그라운드 작업은 yield마다 쉬며(runAsync)
+function runSync(g) { for (;;) { const r = g.next(); if (r.done) return r.value; } }
+async function runAsync(g, pause) { for (;;) { const r = g.next(); if (r.done) return r.value; await pause(); } }
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+const sgn = (v, d) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+
+// sRGB 전달 함수
+const srgbToLin = v => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+const linToSrgb = v => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
+
+// 선형 → sRGB 부호화 LUT (16비트 정밀도로 인덱싱)
+const ENC = new Float32Array(65536);
+for (let i = 0; i < 65536; i++) ENC[i] = linToSrgb(i / 65535);
+// 8비트 화면용: 캔버스(Uint8ClampedArray)와 같은 반올림 규칙이 되도록 같은 형식에 대입해 만듦
+const ENC8 = new Uint8ClampedArray(65536);
+for (let i = 0; i < 65536; i++) ENC8[i] = ENC[i] * 255;
+
+// CRC-32 (PNG, ZIP 공용)
+const CRC_T = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+function crc32(buf, seed = 0) {
+  let c = seed ^ -1;
+  for (let i = 0; i < buf.length; i++) c = CRC_T[(c ^ buf[i]) & 255] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+const ascii = s => new Uint8Array([...s].map(ch => ch.charCodeAt(0)));
+
+// ───────── 인화 모델 상수 ─────────
+const FILM_GAMMA = 0.6;   // 컬러 네거티브의 대표 감마(밀도/로그노출). EV 환산에만 쓰임
+const PAPER_DMAX = 2.4;   // 가상 인화지 최대 농도
+const PAPER_G = 5.0;      // 인화지 기본 기울기 (정규화 로그노출 단위)
+const PAPER_X0 = 0.5;     // 특성곡선 중심
+const CLASSIC_SAT = 1.1;  // 기존 방식의 기본 채도 (채도 슬라이더 100%일 때)
+const PREVIEW_LONG = 1800; // 미리보기·분석용 축소본 긴 변
+const MAX_PX = 200e6;      // 픽셀 수 한도: 16비트 RGB로 1.2GB. 넘으면 브라우저 메모리 한도에 걸림
+const tooBig = (w, h) => new Error(`이미지가 너무 큽니다 (${(w * h / 1e6).toFixed(0)}MP). 브라우저 메모리 한도 때문에 ${MAX_PX / 1e6}MP 이하까지만 엽니다. 해상도를 낮춰 스캔하거나 나눠 저장해 주세요.`);
+// 메모리 할당 실패를 알아듣기 쉬운 말로
+function friendlyError(e) {
+  if (e instanceof RangeError || /allocation|out of memory/i.test(e && e.message)) return '메모리가 부족해 처리하지 못했습니다. 다른 탭을 닫거나 해상도가 낮은 스캔으로 시도해 주세요.';
+  return (e && e.message) || String(e);
+}
+const OPAQUE_D = 2.4;     // 세 채널 평균 밀도가 베이스보다 이만큼 이상 짙으면 필름이 아닌 것(홀더·마스크)으로 봄
+const THIN_D = 0.03;      // 모든 채널이 베이스보다 이만큼 이상 얇으면 필름 밖(빈틈·퍼포레이션으로 새는 빛)으로 봄
+const BASE_TOL = 0.1;     // 모든 채널이 베이스와 이 밀도 안쪽이면 '베이스 같은' 픽셀 (자동 맞춤용)
+const CLIP_CODE = 0.985 * 65535; // 이 이상은 스캐너 클리핑으로 보고 분석에서 뺌
+
+// 스캔 인코딩별 log10(선형 투과율) 표 — 16비트 코드 하나당 하나, 인코딩별로 한 번만 계산
+const LL_CACHE = {};
+function logTable(input) {
+  if (LL_CACHE[input]) return LL_CACHE[input];
+  const dec = input === 'linear' ? v => v : input === 'g22' ? v => Math.pow(v, 2.2) : srgbToLin;
+  const LL = new Float32Array(65536);
+  for (let i = 0; i < 65536; i++) LL[i] = Math.log10(Math.max(dec(i / 65535), 1e-6));
+  return (LL_CACHE[input] = LL);
+}
+// 같은 인코딩의 선형 투과율 표 (log 표와 같은 하한 1e−6)
+const TL_CACHE = {};
+function linTable(input) {
+  if (TL_CACHE[input]) return TL_CACHE[input];
+  const LL = logTable(input), TL = new Float32Array(65536);
+  for (let i = 0; i < 65536; i++) TL[i] = Math.pow(10, LL[i]);
+  return (TL_CACHE[input] = TL);
+}
+
+// ───────── TIFF 디코더 (8/16비트 정수, 32비트 실수 / 무압축·LZW·Deflate·PackBits / 스트립·타일 / 청크·플래너) ─────────
+function lzwDecode(src, expect) {
+  const out = new Uint8Array(expect);
+  const pre = new Int16Array(4096), suf = new Uint8Array(4096), fst = new Uint8Array(4096), len = new Uint16Array(4096);
+  for (let i = 0; i < 256; i++) { pre[i] = -1; suf[i] = i; fst[i] = i; len[i] = 1; }
+  let next = 258, width = 9, old = -1, op = 0;
+  let bits = 0, nb = 0, ip = 0;
+  const n = src.length;
+  // 코드 문자열을 out[op..]에 뒤에서부터 기록
+  const emit = code => {
+    const l = len[code];
+    let pos = op + l - 1, c = code;
+    while (c !== -1) { if (pos < expect) out[pos] = suf[c]; pos--; c = pre[c]; }
+    op += l;
+  };
+  const add = (p, ch) => {
+    if (next >= 4096) return;
+    pre[next] = p; suf[next] = ch; fst[next] = fst[p]; len[next] = len[p] + 1;
+    next++;
+    // TIFF LZW의 '조기 전환': 511, 1023, 2047에서 코드 폭 증가
+    if (next >= (1 << width) - 1 && width < 12) width++;
+  };
+  while (op < expect) {
+    while (nb < width) {
+      if (ip >= n) return out;
+      bits = ((bits << 8) | src[ip++]) >>> 0; nb += 8;
+    }
+    const code = (bits >>> (nb - width)) & ((1 << width) - 1);
+    nb -= width; bits &= (1 << nb) - 1;
+    if (code === 257) break;                       // 끝 코드(EOI)
+    if (code === 256) { next = 258; width = 9; old = -1; continue; } // 코드표 초기화(Clear)
+    if (old === -1) {
+      if (code > 255) break;
+      out[op++] = code; old = code; continue;
+    }
+    if (code < next) { emit(code); add(old, fst[code]); }
+    else if (code === next) { add(old, fst[old]); emit(code); } // 방금 만들어질 항목을 바로 쓰는 경우(KwKwK)
+    else break;                                    // 손상된 데이터
+    old = code;
+  }
+  return out;
+}
+
+function packbitsDecode(src, expect) {
+  const out = new Uint8Array(expect);
+  let ip = 0, op = 0;
+  while (ip < src.length && op < expect) {
+    const k = (src[ip++] << 24) >> 24;
+    if (k >= 0) { for (let i = 0; i <= k && ip < src.length && op < expect; i++) out[op++] = src[ip++]; }
+    else if (k !== -128) { const v = src[ip++]; for (let i = 0; i < 1 - k && op < expect; i++) out[op++] = v; }
+  }
+  return out;
+}
+
+async function inflate(u8) {
+  if (typeof DecompressionStream === 'undefined') throw new Error('이 브라우저는 Deflate 해제를 지원하지 않습니다.');
+  const ds = new DecompressionStream('deflate');
+  const stream = new Blob([u8]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function decodeTIFF(buf, onProg, pause) {
+  const dv = new DataView(buf);
+  const u8all = new Uint8Array(buf);
+  const bo = dv.getUint16(0, false);
+  let le;
+  if (bo === 0x4949) le = true; else if (bo === 0x4D4D) le = false; else throw new Error('TIFF 헤더가 아닙니다.');
+  const magic = dv.getUint16(2, le);
+  if (magic === 43) throw new Error('BigTIFF는 지원하지 않습니다.');
+  if (magic !== 42) throw new Error('TIFF 식별자가 올바르지 않습니다.');
+  const TS = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8, 13: 4, 16: 8 };
+  const SKIP = new Set([700, 33723, 34377, 34675, 37724, 50706]); // XMP, IPTC, Photoshop, ICC 등 큰 블롭
+
+  const readVals = (type, count, off) => {
+    const out = new Array(count), sz = TS[type];
+    for (let i = 0; i < count; i++) {
+      const p = off + i * sz;
+      switch (type) {
+        case 1: case 2: case 7: out[i] = dv.getUint8(p); break;
+        case 6: out[i] = dv.getInt8(p); break;
+        case 3: out[i] = dv.getUint16(p, le); break;
+        case 8: out[i] = dv.getInt16(p, le); break;
+        case 4: case 13: out[i] = dv.getUint32(p, le); break;
+        case 9: out[i] = dv.getInt32(p, le); break;
+        case 5: out[i] = dv.getUint32(p, le) / (dv.getUint32(p + 4, le) || 1); break;
+        case 10: out[i] = dv.getInt32(p, le) / (dv.getInt32(p + 4, le) || 1); break;
+        case 11: out[i] = dv.getFloat32(p, le); break;
+        case 12: out[i] = dv.getFloat64(p, le); break;
+        case 16: out[i] = Number(dv.getBigUint64(p, le)); break;
+      }
+    }
+    return out;
+  };
+  const readIFD = off => {
+    const n = dv.getUint16(off, le), tags = {};
+    for (let i = 0; i < n; i++) {
+      const e = off + 2 + i * 12;
+      if (e + 12 > buf.byteLength) break;
+      const tag = dv.getUint16(e, le), type = dv.getUint16(e + 2, le), count = dv.getUint32(e + 4, le);
+      const sz = TS[type];
+      if (!sz || SKIP.has(tag)) continue;
+      const vo = sz * count <= 4 ? e + 8 : dv.getUint32(e + 8, le);
+      if (vo + sz * count > buf.byteLength) continue;
+      tags[tag] = readVals(type, count, vo);
+    }
+    const nx = off + 2 + n * 12;
+    return { tags, next: nx + 4 <= buf.byteLength ? dv.getUint32(nx, le) : 0 };
+  };
+
+  // IFD 체인과 SubIFD를 모두 훑어 가장 큰 이미지를 고름 (썸네일 IFD 회피)
+  const ifds = [], seen = new Set();
+  let off = dv.getUint32(4, le);
+  while (off && off + 2 <= buf.byteLength && !seen.has(off) && ifds.length < 64) {
+    seen.add(off);
+    const r = readIFD(off);
+    ifds.push(r.tags);
+    for (const so of r.tags[330] || []) {
+      if (!seen.has(so) && so + 2 <= buf.byteLength) { seen.add(so); ifds.push(readIFD(so).tags); }
+    }
+    off = r.next;
+  }
+  let t = null, best = 0;
+  for (const x of ifds) {
+    if (!x[256] || !x[257]) continue;
+    const px = x[256][0] * x[257][0];
+    if (px > best) { best = px; t = x; }
+  }
+  if (!t) throw new Error('TIFF 안에서 이미지 데이터를 찾지 못했습니다.');
+
+  const W = t[256][0], H = t[257][0];
+  if (W * H > MAX_PX) throw tooBig(W, H);
+  const spp = t[277]?.[0] ?? 1;
+  const bps = t[258]?.[0] ?? 1;
+  const comp = t[259]?.[0] ?? 1;
+  const photo = t[262]?.[0] ?? (spp >= 3 ? 2 : 1);
+  const planar = t[284]?.[0] ?? 1;
+  const pred = t[317]?.[0] ?? 1;
+  const fmt = t[339]?.[0] ?? 1;
+  const COMP = { 1: '무압축', 5: 'LZW', 8: 'Deflate', 32946: 'Deflate', 32773: 'PackBits' };
+  if (photo === 6) throw new Error('YCbCr TIFF는 지원하지 않습니다. RGB로 다시 저장해 주세요.');
+  if (spp < 1 || spp > 8 || (photo === 2 && spp < 3)) throw new Error(`표본 수(${spp})가 이상한 TIFF입니다.`);
+  if (![0, 1, 2].includes(photo)) throw new Error(`지원하지 않는 색 형식입니다 (Photometric=${photo}).`);
+  if (!(bps === 8 || bps === 16 || (bps === 32 && fmt === 3))) throw new Error(`${bps}비트 ${fmt === 3 ? '실수' : '정수'} 표본은 지원하지 않습니다. 8·16비트 정수 또는 32비트 실수만 읽습니다.`);
+  if (!COMP[comp]) throw new Error(`압축 방식 ${comp}${comp === 7 ? '(JPEG)' : ''}은 지원하지 않습니다. 무압축, LZW, Deflate, PackBits만 읽습니다.`);
+  if (pred !== 1 && pred !== 2) throw new Error('부동소수 예측자(Predictor=3)는 지원하지 않습니다.');
+
+  const Bps = bps / 8;
+  const tiled = !!t[322];
+  let segW, segH, offs, cnts;
+  if (tiled) { segW = t[322][0]; segH = t[323][0]; offs = t[324]; cnts = t[325]; }
+  else { segW = W; segH = Math.min(t[278]?.[0] ?? H, H); offs = t[273]; cnts = t[279]; }
+  if (!offs) throw new Error('TIFF에 이미지 데이터 위치 정보가 없습니다.');
+  const across = Math.ceil(W / segW), down = Math.ceil(H / segH), perPlane = across * down;
+  const sppSeg = planar === 1 ? spp : 1;
+  const planes = planar === 1 ? 1 : Math.min(spp, 3);
+  const hostLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+  const out = new Uint16Array(W * H * 3);
+  const total = planes * perPlane;
+  let done = 0;
+
+  for (let p = 0; p < planes; p++) {
+    for (let s = 0; s < perPlane; s++) {
+      const idx = p * perPlane + s;
+      if (idx >= offs.length) break;
+      const sx = (s % across) * segW, sy = Math.floor(s / across) * segH;
+      const rows = tiled ? segH : Math.min(segH, H - sy);
+      const nS = segW * rows * sppSeg;
+      const expect = nS * Bps;
+      const cnt = cnts ? cnts[idx] : expect;
+      const raw = u8all.subarray(offs[idx], Math.min(offs[idx] + cnt, u8all.length));
+      let dat;
+      if (comp === 1) dat = raw;
+      else if (comp === 5) dat = lzwDecode(raw, expect);
+      else if (comp === 32773) dat = packbitsDecode(raw, expect);
+      else dat = await inflate(raw);
+      if (dat.length < expect) { const pad = new Uint8Array(expect); pad.set(dat); dat = pad; }
+
+      // 표본을 16비트 정수로 통일. 행 단위로 돌아 pause가 있으면 256행마다 쉼 (한 조각짜리 큰 TIFF도 화면을 오래 막지 않게)
+      const rl = segW * sppSeg;
+      const eachRow = async fn => { for (let r = 0; r < rows; r++) { if (pause && r && (r & 255) === 0) await pause(); fn(r * rl, r * rl + rl); } };
+      let u;
+      if (Bps === 1) {
+        const a = pred === 2 ? dat.slice(0, nS) : dat;
+        u = new Uint16Array(nS);
+        await eachRow((i0, i1) => {
+          if (pred === 2) for (let i = i0 + sppSeg; i < i1; i++) a[i] = (a[i] + a[i - sppSeg]) & 255;
+          for (let i = i0; i < i1; i++) u[i] = a[i] * 257;
+        });
+      } else if (Bps === 2) {
+        if (le === hostLE) {
+          // 짝수 위치에서 시작하면 복사 없이 그대로 봄 (예측자가 없을 때만: 예측자는 제자리에서 고쳐 쓰므로)
+          u = pred === 1 && (dat.byteOffset & 1) === 0 && dat.length >= nS * 2 ? new Uint16Array(dat.buffer, dat.byteOffset, nS) : new Uint16Array(dat.slice(0, nS * 2).buffer);
+          if (pred === 2) await eachRow((i0, i1) => { for (let i = i0 + sppSeg; i < i1; i++) u[i] = (u[i] + u[i - sppSeg]) & 65535; });
+        } else {
+          u = new Uint16Array(nS); const d2 = new DataView(dat.buffer, dat.byteOffset, nS * 2);
+          await eachRow((i0, i1) => {
+            for (let i = i0; i < i1; i++) u[i] = d2.getUint16(i * 2, le);
+            if (pred === 2) for (let i = i0 + sppSeg; i < i1; i++) u[i] = (u[i] + u[i - sppSeg]) & 65535;
+          });
+        }
+      } else {
+        u = new Uint16Array(nS); const d4 = new DataView(dat.buffer, dat.byteOffset, nS * 4);
+        await eachRow((i0, i1) => { for (let i = i0; i < i1; i++) { const v = d4.getFloat32(i * 4, le); u[i] = v > 0 ? (v < 1 ? v * 65535 + 0.5 : 65535) : 0; } });
+      }
+      if (photo === 0) for (let i = 0; i < nS; i++) u[i] = 65535 - u[i]; // 0이 흰색인 흑백(WhiteIsZero)을 뒤집음
+
+      // 출력 버퍼로 복사 (pause가 있으면 256행마다 쉼: 한 조각짜리 큰 TIFF도 화면을 오래 막지 않게)
+      for (let r = 0; r < rows; r++) {
+        if (pause && r && (r & 255) === 0) await pause();
+        const y = sy + r; if (y >= H) break;
+        const cw = Math.min(segW, W - sx);
+        for (let c = 0; c < cw; c++) {
+          const si = (r * segW + c) * sppSeg, di = (y * W + sx + c) * 3;
+          if (planar === 1 || spp < 3) {
+            if (spp >= 3) { out[di] = u[si]; out[di + 1] = u[si + 1]; out[di + 2] = u[si + 2]; }
+            else { const v = u[si]; out[di] = v; out[di + 1] = v; out[di + 2] = v; }
+          } else out[di + p] = u[si];
+        }
+      }
+      done++;
+      if (onProg && done % 32 === 0) { onProg(done / total); await tick(); }
+      if (pause) await pause();
+    }
+  }
+  return { d: out, w: W, h: H, bits: bps, kind: `TIFF ${COMP[comp]}${spp < 3 ? ', 흑백' : ''}` };
+}
+
+// ───────── 파일 불러오기 ─────────
+async function loadImageFile(file, onProg, pause) {
+  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  const isTiff = (head[0] === 0x49 && head[1] === 0x49 && head[2] === 42) || (head[0] === 0x4D && head[1] === 0x4D && head[3] === 42);
+  if (isTiff) return decodeTIFF(await file.arrayBuffer(), onProg, pause);
+  let bmp;
+  try { bmp = await createImageBitmap(file); }
+  catch { throw new Error('이 브라우저가 읽을 수 없는 이미지 형식입니다. TIFF, JPEG, PNG로 저장해 주세요.'); }
+  const w = bmp.width, h = bmp.height;
+  if (w * h > MAX_PX) { bmp.close?.(); throw tooBig(w, h); }
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(bmp, 0, 0); bmp.close?.();
+  const src = cx.getImageData(0, 0, w, h).data;
+  cv.width = cv.height = 0;
+  const d = new Uint16Array(w * h * 3);
+  for (let y = 0; y < h; y++) {
+    if (pause && y && (y & 255) === 0) await pause();
+    for (let i = y * w * 4, j = y * w * 3, e = j + w * 3; j < e; i += 4, j += 3) { d[j] = src[i] * 257; d[j + 1] = src[i + 1] * 257; d[j + 2] = src[i + 2] * 257; }
+  }
+  const ext = (file.name.split('.').pop() || '').toUpperCase();
+  return { d, w, h, bits: 8, kind: ext || '이미지' };
+}
+
+// ───────── 기하 변환 ─────────
+function rotateImg(img, cw) {
+  const { d, w, h } = img, out = new Uint16Array(d.length), nw = h;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const si = (y * w + x) * 3;
+      // 시계: (x,y) → (h-1-y, x) / 반시계: (x,y) → (y, w-1-x)
+      const nx = cw ? h - 1 - y : y, ny = cw ? x : w - 1 - x;
+      const di = (ny * nw + nx) * 3;
+      out[di] = d[si]; out[di + 1] = d[si + 1]; out[di + 2] = d[si + 2];
+    }
+  }
+  return { ...img, d: out, w: h, h: w };
+}
+function flipImg(img) {
+  const { d, w, h } = img, out = new Uint16Array(d.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const si = (y * w + x) * 3, di = (y * w + (w - 1 - x)) * 3;
+      out[di] = d[si]; out[di + 1] = d[si + 1]; out[di + 2] = d[si + 2];
+    }
+  }
+  return { ...img, d: out };
+}
+// 저장된 방향: 먼저 좌우 반전, 그다음 시계 방향 rot번 회전
+function orient(img, s) {
+  let r = img;
+  if (s.flip) r = flipImg(r);
+  if (s.rot === 1) r = rotateImg(r, true);
+  else if (s.rot === 2) r = rotateImg(rotateImg(r, true), true);
+  else if (s.rot === 3) r = rotateImg(r, false);
+  return r;
+}
+const cropCW = c => ({ x: 1 - c.y - c.h, y: c.x, w: c.h, h: c.w });
+const cropCCW = c => ({ x: c.y, y: 1 - c.x - c.w, w: c.h, h: c.w });
+const cropFlip = c => ({ x: 1 - c.x - c.w, y: c.y, w: c.w, h: c.h });
+
+// 면적 평균 축소
+function downscale(img, maxLong) { return runSync(downscaleG(img, maxLong)); }
+function* downscaleG(img, maxLong) {
+  const { d, w: W, h: H } = img;
+  const k = Math.max(W, H) / maxLong;
+  if (k <= 1) return { d: d.slice(), w: W, h: H };
+  const w = Math.max(1, Math.round(W / k)), h = Math.max(1, Math.round(H / k));
+  const out = new Uint16Array(w * h * 3);
+  const xa = new Int32Array(w + 1);
+  for (let x = 0; x <= w; x++) xa[x] = Math.min(W, Math.floor(x * W / w));
+  const acc = new Float64Array(w * 3);
+  for (let y = 0; y < h; y++) {
+    if (y && (y & 127) === 0) yield;
+    const ya = Math.floor(y * H / h), yb = Math.max(ya + 1, Math.floor((y + 1) * H / h));
+    acc.fill(0);
+    for (let sy = ya; sy < yb; sy++) {
+      const ro = sy * W * 3;
+      for (let x = 0; x < w; x++) {
+        const a = xa[x], b = Math.max(a + 1, xa[x + 1]);
+        let r = 0, g = 0, bl = 0;
+        for (let sx = a; sx < b; sx++) { const i = ro + sx * 3; r += d[i]; g += d[i + 1]; bl += d[i + 2]; }
+        acc[x * 3] += r; acc[x * 3 + 1] += g; acc[x * 3 + 2] += bl;
+      }
+    }
+    const oo = y * w * 3;
+    for (let x = 0; x < w; x++) {
+      const n = (Math.max(xa[x] + 1, xa[x + 1]) - xa[x]) * (yb - ya);
+      out[oo + x * 3] = acc[x * 3] / n + 0.5;
+      out[oo + x * 3 + 1] = acc[x * 3 + 1] / n + 0.5;
+      out[oo + x * 3 + 2] = acc[x * 3 + 2] / n + 0.5;
+    }
+  }
+  return { d: out, w, h };
+}
+
+// ───────── 분석: 필름 베이스 자동 감지, 채널별 백분위 ─────────
+// 베이스 = 클리핑되지 않은 가장 밝은(가장 얇은) 0.3% 픽셀의 평균. 주황 마스크(R≥G≥B) 후보를 우선 사용
+function autoBase(P) {
+  const d = P.d, n = P.w * P.h, LIM = CLIP_CODE;
+  const pass = orange => {
+    const hist = new Uint32Array(1024); let cnt = 0;
+    for (let i = 0; i < n; i++) {
+      const r = d[i * 3], g = d[i * 3 + 1], b = d[i * 3 + 2];
+      if (r >= LIM || g >= LIM || b >= LIM) continue;
+      if (orange && !(r >= g && g >= b)) continue;
+      hist[((r + g + b) / 3) >> 6]++; cnt++;
+    }
+    return { hist, cnt };
+  };
+  let orange = true, h = pass(true);
+  if (h.cnt < Math.max(500, n * 0.02)) { orange = false; h = pass(false); }
+  if (!h.cnt) return [65535, 65535, 65535];
+  const want = Math.max(50, h.cnt * 0.003);
+  let acc = 0, thr = 1023;
+  for (; thr > 0; thr--) { acc += h.hist[thr]; if (acc >= want) break; }
+  const sum = [0, 0, 0]; let m = 0;
+  for (let i = 0; i < n; i++) {
+    const r = d[i * 3], g = d[i * 3 + 1], b = d[i * 3 + 2];
+    if (r >= LIM || g >= LIM || b >= LIM) continue;
+    if (orange && !(r >= g && g >= b)) continue;
+    if ((((r + g + b) / 3) >> 6) < thr) continue;
+    sum[0] += r; sum[1] += g; sum[2] += b; m++;
+  }
+  return m ? sum.map(v => v / m) : [65535, 65535, 65535];
+}
+
+// 픽셀 분류 마스크: 0 = 필름 화상, 1 = 필름이 아님(클리핑·베이스보다 얇음·불투명), 2 = 베이스와 같은 밀도
+function filmMask(P, s, baseAuto) {
+  const LL = logTable(s.input), base = s.baseCode || baseAuto;
+  const b0 = LL[clamp(Math.round(base[0]), 0, 65535)], b1 = LL[clamp(Math.round(base[1]), 0, 65535)], b2 = LL[clamp(Math.round(base[2]), 0, 65535)];
+  const d = P.d, n = P.w * P.h, M = new Uint8Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    const r = d[j], g = d[j + 1], b = d[j + 2];
+    if (r >= CLIP_CODE || g >= CLIP_CODE || b >= CLIP_CODE) { M[i] = 1; continue; }
+    const dr = b0 - LL[r], dg = b1 - LL[g], db = b2 - LL[b];   // 베이스 대비 채널별 밀도
+    if (dr + dg + db > 3 * OPAQUE_D || (dr < -THIN_D && dg < -THIN_D && db < -THIN_D)) M[i] = 1;
+    else if (Math.abs(dr) < BASE_TOL && Math.abs(dg) < BASE_TOL && Math.abs(db) < BASE_TOL) M[i] = 2;
+  }
+  return M;
+}
+// 가장자리에서 안쪽으로 한 줄씩 걸어 들어가며, 조건을 만족하는 픽셀이 frac 이상인 줄을 테두리로 봄
+function walkEdges(M, w, h, isEdge, frac, box, cap) {
+  const rowF = (y, a, b) => { let c = 0; for (let x = a; x < b; x++) c += isEdge(M[y * w + x]); return c / (b - a); };
+  const colF = (x, a, b) => { let c = 0; for (let y = a; y < b; y++) c += isEdge(M[y * w + x]); return c / (b - a); };
+  const cy = Math.round(h * cap), cx = Math.round(w * cap), o = { ...box };
+  let y = box.y0; while (y < box.y0 + cy && y < box.y1 - 2 && rowF(y, box.x0, box.x1) >= frac) y++;
+  o.y0 = y;
+  y = box.y1 - 1; while (y > box.y1 - 1 - cy && y > o.y0 + 1 && rowF(y, box.x0, box.x1) >= frac) y--;
+  o.y1 = y + 1;
+  let x = box.x0; while (x < box.x0 + cx && x < box.x1 - 2 && colF(x, o.y0, o.y1) >= frac) x++;
+  o.x0 = x;
+  x = box.x1 - 1; while (x > box.x1 - 1 - cx && x > o.x0 + 1 && colF(x, o.y0, o.y1) >= frac) x--;
+  o.x1 = x + 1;
+  return o;
+}
+// 테두리 찾기: 1차는 대부분이 테두리인 줄(홀더), 2차는 비스듬히 걸친 홀더 쐐기를 걷어냄.
+// 찾은 쪽은 경계의 번짐·JPEG 링잉을 피하도록 조금 더 안으로 들임
+function findBorder(M, w, h, isEdge, fracs) {
+  const full = { x0: 0, y0: 0, x1: w, y1: h };
+  let b = walkEdges(M, w, h, isEdge, fracs[0], full, 0.3);
+  b = walkEdges(M, w, h, isEdge, fracs[1], b, 0.05);
+  const k = Math.max(3, Math.round(Math.max(w, h) * 0.004));
+  const o = {
+    x0: b.x0 > 0 ? b.x0 + k : 0, y0: b.y0 > 0 ? b.y0 + k : 0,
+    x1: b.x1 < w ? b.x1 - k : w, y1: b.y1 < h ? b.y1 - k : h,
+  };
+  return o.x1 - o.x0 > w * 0.2 && o.y1 - o.y0 > h * 0.2 ? o : full;
+}
+
+// 분석 영역(자르기 영역 − 테두리 여백 ∩ 자동으로 찾은 필름 영역)의 결합 히스토그램.
+// 채널별로 따로 백분위를 잡으면 채도 높은 물체(예: 시안의 R)가 그 채널의 끝점을 가로채
+// 세 채널이 서로 다른 물체에 맞춰지므로, '가장 얇은/짙은 것들'을 한 묶음으로 골라 채널별 평균을 쓴다.
+// 고르는 기준과 재는 값을 분리해 잡음에 의한 선택 편향을 없앤다:
+//   순위 = 5×5 이웃의 세 채널 평균 log 투과율(area.rank) — 재는 픽셀 자신의 잡음은 1/25만 섞임
+//   값   = 그 픽셀의 채널별 선형 투과율 — 선형으로 평균해야 log 평균의 과소 추정(젠센 부등식)이 없음
+// 필름일 수 없는 픽셀(스캐너 클리핑, 홀더 틈으로 새는 빛, 불투명 홀더)은 뺀다
+const JB = 6144, JLO = -6;               // log10 투과율 −6…0을 0.001 간격 칸으로
+function analyzeHist(P, s, area) {
+  const c = s.crop || { x: 0, y: 0, w: 1, h: 1 }, m = s.margin / 100;
+  let x0 = Math.floor((c.x + c.w * m) * P.w), x1 = Math.ceil((c.x + c.w * (1 - m)) * P.w);
+  let y0 = Math.floor((c.y + c.h * m) * P.h), y1 = Math.ceil((c.y + c.h * (1 - m)) * P.h);
+  x0 = clamp(x0, 0, P.w - 1); y0 = clamp(y0, 0, P.h - 1);
+  x1 = clamp(x1, x0 + 1, P.w); y1 = clamp(y1, y0 + 1, P.h);
+  const total = (x1 - x0) * (y1 - y0), B = area.border;
+  const ix0 = Math.max(x0, B.x0), iy0 = Math.max(y0, B.y0), ix1 = Math.min(x1, B.x1), iy1 = Math.min(y1, B.y1);
+  if (ix1 - ix0 > 0 && iy1 - iy0 > 0 && (ix1 - ix0) * (iy1 - iy0) >= total * 0.05) { x0 = ix0; y0 = iy0; x1 = ix1; y1 = iy1; }
+  const d = P.d, M = area.M, R = area.rank, TL = linTable(s.input), sc = JB / -JLO;
+  const run = strict => {
+    const cnt = new Uint32Array(JB), sum = new Float64Array(JB * 3);
+    let n = 0;
+    for (let y = y0; y < y1; y++) {
+      let i = (y * P.w + x0) * 3, k = y * P.w + x0;
+      for (let x = x0; x < x1; x++, i += 3, k++) {
+        if (strict && M[k] === 1) continue;
+        let q = (R[k] - JLO) * sc | 0;
+        q = q < 0 ? 0 : q >= JB ? JB - 1 : q;
+        cnt[q]++; sum[q * 3] += TL[d[i]]; sum[q * 3 + 1] += TL[d[i + 1]]; sum[q * 3 + 2] += TL[d[i + 2]]; n++;
+      }
+    }
+    return { cnt, sum, n };
+  };
+  let h = run(true);
+  if (h.n < total * 0.05) h = run(false);   // 거의 다 빠지면(베이스 오인 등) 제외 없이 분석
+  return { ...h, excluded: 1 - h.n / total };
+}
+// 마스크와 필름 영역은 베이스·인코딩에만 달려 있으므로 둘이 바뀔 때만 다시 계산
+function filmArea(P, s, baseAuto) { return runSync(filmAreaG(P, s, baseAuto)); }
+function* filmAreaG(P, s, baseAuto) {   // 단계마다 yield (백그라운드 썸네일이 사이에 쉴 수 있게)
+  const M = filmMask(P, s, baseAuto);
+  yield;
+  const border = findBorder(M, P.w, P.h, v => v === 1, [0.6, 0.15]);
+  yield;
+  return { M, border, rank: yield* rankMapG(P, s, M, 2) };
+}
+// 순위용 지도: 세 채널 평균 log 투과율을 (2r+1)² 상자로 평균. 필름이 아닌 픽셀은 이웃 평균에서 빼서
+// 홀더·먼지 옆 픽셀이 극단값으로 끌려가지 않게 함 (값 합과 유효 개수를 같이 흐리고 나눔)
+function* rankMapG(P, s, M, r) {   // 단계마다 yield (백그라운드 썸네일용)
+  const w = P.w, h = P.h, n = w * h, d = P.d, LL = logTable(s.input);
+  const v = new Float32Array(n), c = new Float32Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    const ok = M[i] !== 1 ? 1 : 0;
+    c[i] = ok; v[i] = ok * (LL[d[j]] + LL[d[j + 1]] + LL[d[j + 2]]) / 3;
+  }
+  yield;
+  const bv = boxSum(v, w, h, r);
+  yield;
+  const bc = boxSum(c, w, h, r), own = v;
+  yield;
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    // 이웃에 필름 픽셀이 없으면 자기 값을 그대로 씀
+    own[i] = bc[i] > 0.5 ? bv[i] / bc[i] : (LL[d[j]] + LL[d[j + 1]] + LL[d[j + 2]]) / 3;
+  }
+  return own;
+}
+// 가장자리를 늘여 붙인 (2r+1)² 상자 합. 가로는 누적 합, 세로는 행 단위 누적으로 메모리를 연속 접근
+function boxSum(src, w, h, r) {
+  const tmp = new Float32Array(w * h), out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    let acc = 0;
+    for (let x = -r; x <= r; x++) acc += src[o + (x < 0 ? 0 : x >= w ? w - 1 : x)];
+    for (let x = 0; x < w; x++) {
+      tmp[o + x] = acc;
+      const xa = x - r, xb = x + r + 1;
+      acc += src[o + (xb >= w ? w - 1 : xb)] - src[o + (xa < 0 ? 0 : xa)];
+    }
+  }
+  const row = new Float64Array(w);
+  for (let y = -r; y <= r; y++) { const o = (y < 0 ? 0 : y >= h ? h - 1 : y) * w; for (let x = 0; x < w; x++) row[x] += tmp[o + x]; }
+  for (let y = 0; y < h; y++) {
+    const o = y * w, ya = (y - r < 0 ? 0 : y - r) * w, yb = (y + r + 1 >= h ? h - 1 : y + r + 1) * w;
+    for (let x = 0; x < w; x++) { out[o + x] = row[x]; row[x] += tmp[yb + x] - tmp[ya + x]; }
+  }
+  return out;
+}
+// 결합 히스토그램의 양 끝에서 clip% 만큼의 픽셀을 모아 채널별 평균 투과율의 log를 구함
+// llLo: 가장 짙은 쪽(장면 하이라이트) / llHi: 가장 얇은 쪽(장면 그림자). 너무 적으면 잡음에 휘둘리므로 최소 0.02%
+function percentiles(hist, clipB, clipW) {
+  const { cnt, sum, n } = hist;
+  const tail = (pct, fromTop) => {
+    const want = Math.max(1, n * Math.max(pct, 0.02) / 100), acc = [0, 0, 0];
+    let got = 0;
+    for (let k = 0; k < JB && got < want; k++) {
+      const q = fromTop ? JB - 1 - k : k, c = cnt[q];
+      if (!c) continue;
+      const f = Math.min(1, (want - got) / c);   // 마지막 칸은 필요한 만큼만 비례해 더함
+      for (let ch = 0; ch < 3; ch++) acc[ch] += sum[q * 3 + ch] * f;
+      got += c * f;
+    }
+    return acc.map(v => Math.log10(Math.max(v / Math.max(got, 1e-9), 1e-6)));
+  };
+  const llLo = tail(clipW, false), llHi = tail(clipB, true);
+  for (let c = 0; c < 3; c++) if (llHi[c] < llLo[c] + 0.01) llHi[c] = llLo[c] + 0.01;
+  return { llLo, llHi };
+}
+
+// ───────── 변환 파이프라인: 채널별 1D LUT (16비트 코드 → 디스플레이 선형) ─────────
+function paperR(x, g) { return Math.pow(10, -PAPER_DMAX / (1 + Math.exp(g * (x - PAPER_X0)))); }
+
+function buildPipe(s, an, ai) {
+  if (ai) return buildPipeAi(s, an, ai);
+  const LL = logTable(s.input); // log10(선형 투과율)
+  const base = s.baseCode || an.baseAuto;
+  const lb = base.map(v => LL[clamp(Math.round(v), 0, 65535)]);
+  // 베이스 대비 밀도: D = log10(T_b) − log10(T)
+  const dHi = [0, 1, 2].map(c => lb[c] - an.llLo[c]);
+  const dLo = [0, 1, 2].map(c => (s.blackMode === 'base' ? 0 : lb[c] - an.llHi[c]));
+  let rng = dHi.map((h, c) => Math.max(h - dLo[c], 0.05));
+  if (s.channelMode === 'linked') { const m = (rng[0] + rng[1] + rng[2]) / 3; rng = [m, m, m]; }
+  const S = rng[1] / (FILM_GAMMA * LOG10_2); // 장면 범위(스톱)
+  // 색온도 T=(1,0,−1), 색조 M=(½,−1,½): 둘 다 (1,1,1)과 직교 → 밝기 불변
+  const wb = [s.temp + 0.5 * s.tint, -s.tint, -s.temp + 0.5 * s.tint];
+  const bp = s.black, lvl = 1 / (1 + s.white - s.black);
+  const g = PAPER_G * s.contrast;
+  const R0 = paperR(0, g), R1 = paperR(1, g), kR = 1 / (R1 - R0);
+  const lut = [0, 1, 2].map(c => {
+    const L = new Float32Array(65536);
+    const off = (wb[c] + s.exposure) / S, inv = 1 / rng[c], l0 = lb[c] - dLo[c];
+    for (let i = 0; i < 65536; i++) {
+      const x = ((l0 - LL[i]) * inv + off - bp) * lvl;             // 정규화 로그 노출
+      const D = PAPER_DMAX / (1 + Math.exp(g * (x - PAPER_X0)));   // 인화지 농도
+      const y = (Math.pow(10, -D) - R0) * kR;                        // 정규화 반사율
+      L[i] = y < 0 ? 0 : y;
+    }
+    return L;
+  });
+  const pp = { mode: 'classic', lut, LL, lb, dLo, dHi, rng, S, base, sat: s.sat * CLASSIC_SAT };
+  pp.pre = (c, code) => xPre(pp, c, code) * S;   // 사용자 색온도·색조 이전의 로그 노출 (스톱, 회색 스포이트용)
+  return pp;
+}
+// 화이트밸런스 이전의 정규화 로그 노출 (회색 스포이트용)
+const xPre = (pp, c, code) => (pp.lb[c] - pp.LL[code] - pp.dLo[c]) / pp.rng[c];
+
+// ───────── 픽셀 처리 (LUT → 채도 → sRGB → 언샤프) ─────────
+function gaussBlur(src, w, h, sigma) {
+  const r = Math.max(1, Math.ceil(sigma * 3)), k = new Float32Array(2 * r + 1);
+  let sum = 0;
+  for (let i = -r; i <= r; i++) { k[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma)); sum += k[i + r]; }
+  for (let i = 0; i < k.length; i++) k[i] /= sum;
+  const tmp = new Float32Array(w * h), out = new Float32Array(w * h), row = new Float32Array(w + 2 * r);
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    for (let x = 0; x < w; x++) row[x + r] = src[o + x];
+    for (let x = 0; x < r; x++) { row[x] = src[o]; row[w + r + x] = src[o + w - 1]; }
+    for (let x = 0; x < w; x++) { let a = 0; for (let j = 0; j < k.length; j++) a += k[j] * row[x + j]; tmp[o + x] = a; }
+  }
+  // 세로 방향은 행 단위로 누적 (메모리 접근이 연속적)
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    for (let j = -r; j <= r; j++) {
+      const yy = y + j < 0 ? 0 : y + j >= h ? h - 1 : y + j, kk = k[j + r], io = yy * w;
+      for (let x = 0; x < w; x++) out[o + x] += kk * tmp[io + x];
+    }
+  }
+  return out;
+}
+// 휘도에만 적용하는 언샤프 마스크 (색 번짐 없음), 부드러운 임계값으로 그레인 억제
+function unsharp(buf, w, h, { amt, sigma, thr }) {
+  const n = w * h, Y = new Float32Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 3) Y[i] = 0.2126 * buf[j] + 0.7152 * buf[j + 1] + 0.0722 * buf[j + 2];
+  const B = gaussBlur(Y, w, h, sigma);
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    let dd = Y[i] - B[i];
+    const a = dd < 0 ? -dd : dd;
+    if (a < thr) dd *= a / thr;
+    dd *= amt;
+    let v = buf[j] + dd; buf[j] = v < 0 ? 0 : v > 1 ? 1 : v;
+    v = buf[j + 1] + dd; buf[j + 1] = v < 0 ? 0 : v > 1 ? 1 : v;
+    v = buf[j + 2] + dd; buf[j + 2] = v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+}
+function sharpParams(s, scale, pp) {
+  const sigma = s.sharpRad * scale, ai = pp && pp.mode === 'ai' ? pp.ai : null;
+  if (!ai) {
+    if (s.sharpAmt <= 0 || sigma < 0.35) return null;
+    return { amt: s.sharpAmt, sigma, thr: s.sharpThr };
+  }
+  // Ai+: 잡음 줄이기(원본 해상도 기준 반경을 화면 배율에 맞춤). 0.6배보다 작은 미리보기에서는 그레인이 이미 평균돼 생략
+  // 측정한 그레인이 8비트 한 단계 안팎으로 보이지 않을 만큼 작으면 그 단계(밝기·색)는 건너뜀
+  const gr = ai.grain || { y: 0, c: 0 }, k = Math.min(1, scale), doY = gr.y * k > AI.nrMinY, doC = gr.c * k > AI.nrMinC;
+  let nr = null;
+  if (scale >= 0.6 && (doY || doC)) {
+    nr = { rc: doC ? Math.max(1, Math.round(AI.nrRad * scale)) : 0, ec: Math.pow(AI.nrChroma * gr.c * k, 2) + 1e-7,
+           rl: doY ? Math.max(1, Math.round(AI.nrLumaRad * scale)) : 0, el: Math.pow(AI.nrLuma * gr.y * k, 2) + 1e-7, ml: AI.nrLumaMix };
+  }
+  const amt = s.sharpAmt * AI.sharpMul, doSh = amt > 0 && sigma >= 0.35;
+  if (!nr && !doSh) return null;
+  // 선명화 문턱: 잡음 줄이기 뒤 남은 밝기 잡음의 2배 아래 진폭은 거의 키우지 않음 (윤곽만 또렷하게)
+  const yRes = gr.y * k * (nr && nr.rl > 0 ? 1 - 0.5 * AI.nrLumaMix : 1);
+  return { amt: doSh ? amt : 0, sigma: Math.max(sigma, 0.35), thr: Math.max(s.sharpThr, 2 * yRes), nr };
+}
+// 원본 배열의 사각 영역을 처리해 sRGB 부호화 값(0–1)의 Float32Array로 반환
+function processRect(src, W, H, rx, ry, rw, rh, pp, sh) {
+  // 이웃을 보는 후처리(잡음 줄이기·선명화)가 가장자리에서도 같게 되도록 주변을 더 처리한 뒤 잘라냄
+  // 잡음 줄이기의 이웃 범위: 밝기는 원해상도 반경 rl의 박스 두 번(2rl), 색은 반해상도 반경 ⌈rc/2⌉의 박스 두 번과 쌍선형 한 칸(원해상도로 4⌈rc/2⌉ + 2)
+  const rcH = sh && sh.nr ? Math.max(1, Math.round(sh.nr.rc / 2)) : 0;
+  const pad = sh ? Math.max(sh.amt > 0 ? Math.ceil(sh.sigma * 3) + 1 : 0, sh.nr ? Math.max(sh.nr.rc > 0 ? 4 * rcH + 2 : 0, 2 * sh.nr.rl) + 2 : 0) : 0;
+  let x0 = Math.max(0, rx - pad), y0 = Math.max(0, ry - pad);
+  if (sh && sh.nr) { x0 &= ~1; y0 &= ~1; }   // 잡음 줄이기의 반해상도 격자를 전체 화상의 짝수 좌표에 맞춤
+  const x1 = Math.min(W, rx + rw + pad), y1 = Math.min(H, ry + rh + pad);
+  const pw = x1 - x0, ph = y1 - y0;
+  const buf = new Float32Array(pw * ph * 3);
+  if (pp.mode === 'ai') aiRect(src, W, H, x0, y0, pw, ph, pp, buf);
+  else {
+  const L0 = pp.lut[0], L1 = pp.lut[1], L2 = pp.lut[2], sat = pp.sat;
+  let o = 0;
+  for (let y = y0; y < y1; y++) {
+    let i = (y * W + x0) * 3;
+    for (let x = 0; x < pw; x++, i += 3, o += 3) {
+      let r = L0[src[i]], g = L1[src[i + 1]], b = L2[src[i + 2]];
+      if (sat !== 1) {
+        const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b; // 선형 휘도 보존 채도
+        r = Y + sat * (r - Y); g = Y + sat * (g - Y); b = Y + sat * (b - Y);
+      }
+      r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+      buf[o] = ENC[(r * 65535 + 0.5) | 0]; buf[o + 1] = ENC[(g * 65535 + 0.5) | 0]; buf[o + 2] = ENC[(b * 65535 + 0.5) | 0];
+    }
+  }
+  }
+  if (sh && sh.nr) aiDenoise(buf, pw, ph, sh.nr);
+  if (sh && sh.amt > 0) unsharp(buf, pw, ph, sh);
+  if (pw === rw && ph === rh) return buf;
+  const out = new Float32Array(rw * rh * 3), ox = rx - x0, oy = ry - y0;
+  for (let y = 0; y < rh; y++) {
+    const a = ((y + oy) * pw + ox) * 3;
+    out.set(buf.subarray(a, a + rw * 3), y * rw * 3);
+  }
+  return out;
+}
+
+// ───────── Ai+ : 디지털 사진처럼 마감 ─────────
+// 기존 방식의 필름 해석은 그대로 쓰고, 마지막 '가상 인화지' 대신 디지털카메라처럼 렌더링해 디지털로 찍은 사진처럼 만든다.
+// 신경망이 아니라 통계적 분석이며 모두 브라우저 안에서 계산한다.
+//  1) 기준: 기존 방식의 베이스 제거·채널별 정규화까지 거친 로그 노출(0 = 그림자 기준, 1 = 하이라이트 기준)을 선형 빛으로.
+//     인화지 곡선은 채널마다 걸려 하늘 같은 밝은 색은 바래고 그림자 색은 짙어지므로 쓰지 않음.
+//     사용자 슬라이더는 중립으로 두고 분석하고, 슬라이더는 Ai+ 결과 위에 더하는 미세 조정으로 씀
+//  2) 화이트밸런스: 밝기 구간마다 '무채색 후보'(색 틀어짐이 작을 법한 픽셀)가 모이는 색을 찾고, 여러 구간이 매끄럽게
+//     이어지는 색 틀어짐만 실제 캐스트로 인정해 밝기별로 뺌(필름 층마다 특성곡선 모양이 달라 생기는 중간 톤 캐스트까지).
+//     큰 단색 면(하늘·나무)이 후보를 독차지하지 못하게 칸마다 표를 제한하고, 장면 전체 평균색이 같은 방향일 때만 그만큼
+//     믿음. 실내등·노을의 따뜻함은 카메라 자동 화밸처럼 조금 남김
+//  3) 톤: 중앙 가중(하늘처럼 훨씬 밝은 곳은 가볍게) 측광으로 중간 밝기를 맞추고, 눈밭·야경처럼 분명한 장면 키는 따름.
+//     두 기울기 로그-로지스틱 곡선을 휘도에 걸고 세 채널을 같은 배율로(채널 비 보존: 하늘·피부 색이 그대로),
+//     색역 밖으로 나가는 밝은 색은 휘도를 지키며 채도만 줄임. 안개처럼 뜬 그림자는 선형 베일을 빼서 걷어 냄
+//  4) 색: 바이브런스(흐린 색일수록 더, 피부색은 아낌)와 채도(Lab C*) 평준화로 '조금 높은' 채도. 색역을 넘지 않게
+//  5) 맑게: 가이디드 필터 국소 대비. 그레인을 재서 색 얼룩 잡음은 강하게, 밝기 잡음은 가볍게 줄임
+//  6) 또렷하게: 남은 잡음보다 큰 윤곽만 선명화
+const AI_TIP = '장면을 인식하여 사진을 찍은 상황에 가장 근접하게 포지티브로 변환하고, 맑고 깨끗하게 보정합니다. 모든 장면에 적용을 보장하지 않습니다. 제대로 적용되지 않는다면 이 기능을 끄세요. ';
+const AI_MAP = 768;   // 분석·국소 대비 지도의 긴 변
+const AI = {
+  keyOut: 0.26,       // 보통 장면의 계측값(로그 평균)이 닿을 출력 (선형, L* 약 58: 요즘 디지털 사진처럼 약간 밝게)
+  keyDead: 0.12,      // 장면 키가 이 안이면 보통 장면으로 보고 모두 같은 밝기로
+  keyUp: 1.15, keyDown: 2.0, // 그 밖에서 장면 키를 얼마나 따를지 (하이키 쪽, 로우키 쪽)
+  keyDown2: 1.7,      // 로우키 쪽 2차 항: 조금 어두운 장면(실내등)은 거의 그대로, 야경처럼 아주 어두운 장면만 더 어둡게 남김
+  keyMin: 0.02, keyMax: 0.52,
+  whiteOut: 0.95,     // 휘도 99.5%가 닿을 출력 (디지털처럼 깨끗한 흰색)
+  gamutKeep: 0.5,     // 색역 밖(밝고 선명한 색, 예: 밝은 파란 하늘): 휘도 유지(회색 쪽으로)와 색도 유지(전체를 낮춤)를 반씩.
+                      // 휘도만 지키면 하늘이 허옇게 바래고, 색도만 지키면 너무 어두워짐
+  blackOut: 0.004,    // 명암 범위가 넓은(8스톱 이상) 장면의 그림자(0.5%)가 닿을 출력. 좁을수록 스톱당 2^0.7배씩 덜 깊게
+  blackRelax: 0.7,    // 명암 범위가 blackDR보다 좁을 때 스톱마다 검은점 목표를 2^blackRelax배씩 올림 (최대 blackSpan스톱)
+  blackDR: 6, blackSpan: 4.5, // 기준 범위: 실제 네거티브는 필름의 발(toe)·스캔 때문에 맑은 날도 범위가 5스톱 남짓으로 잡히므로 8에서 낮춤
+  nsMin: 1.45, nsMax: 2.0, // 그림자 쪽(키 아래) 곡선 기울기(로짓 대 로그 밝기) 범위. 하한은 카메라 곡선처럼 중간 톤 대비를 보장:
+                        // 명암 범위가 아주 넓어도 곡선을 늘어뜨리지 않고 양 끝을 잘라 냄 (넓은 범위의 그림자 세부는 baseComp가 일부 살림)
+  nhMin: 1.5, nhMax: 2.0, // 밝은 쪽(키 위) 기울기 범위: 디지털카메라 곡선처럼 중간 톤 위가 가파르고 흰색 근처에서 어깨.
+                        // 상한이 낮으면 하늘보다 어두운 흰 물체가 밝은 회색에 머물러 물 빠진 듯 보임
+  dehaze: 0.6,        // 기울기를 최대로 해도 그림자가 뜨면(안개) 그 차이의 이만큼을 베일로 빼서 걷어 냄
+  knee: 0.7,          // 두 기울기가 이어지는 폭 (자연로그 단위, 약 1스톱)
+  clarity: 0.3,       // 중간 크기 세부 강조 (스톱 비율)
+  baseComp: 0.2,      // 역광처럼 명암 범위가 넓은 장면에서 큰 명암 차를 줄이는 최대 양 (7스톱부터 12스톱까지 점점)
+  vib: 0.25,          // 바이브런스 (덜 선명한 색일수록 더 올림)
+  neutralLo: 0.05, neutralHi: 0.18, // 무채색 보호: 채도(HSV S)가 이 사이에서 채도 올림이 0 → 전부로 (회색에 남은 작은 캐스트를 키우지 않게)
+  chromaTarget: 30,   // 채도 평준화 목표 (보통 밝기 픽셀의 75% 분위 Lab C*): 자연보다 조금 높게
+  satMin: 1.0, satMax: 1.3, // 필름이 낸 채도보다 내리지는 않음. 상한은 흐린 장면(안개) 기준
+  satMaxClear: 1.4,   // 맑은 장면(명암 범위 blackDR 이상)의 채도 상한: 채도가 낮게 스캔된 필름도 알맞게 살림
+  castTCap: 0.5, castMCap: 0.35, // 밝기별 캐스트 보정 한도 (스톱)
+  ambDead: 0.2, ambWarm: 0.4, ambWarmCap: 0.4, ambCool: 0.1, ambCoolCap: 0.1, // 조명 분위기 보존
+  eps: 0.0005,        // 로그를 잴 때 더하는 작은 값 (검정 근처 잡음이 색을 흔들지 않게)
+  cast: {             // 화이트밸런스 (중성 후보 합의)
+    sigT: 0.18, sigM: 0.12, // 후보 사전 가중: 색 틀어짐이 이만큼(스톱) 벗어날수록 후보에서 멀어짐
+    cs: 0.015, tR: 0.55, mR: 0.4, // 색도 격자 칸 크기와 범위 (τ: 호박–파랑, μ: 마젠타–초록)
+    texFull: 0.04, texMin: 0.7, // 결 가중: 주변(9×9)과의 밝기 차가 이만큼(스톱)이면 1, 매끈한 면(하늘)은 texMin까지 낮춤
+    cell: 16, cap: 24,  // 지도 위 칸(px)마다 한 색도 칸에 셀 수 있는 픽셀 상한 (큰 단색 면의 표 제한)
+    win: 0.045,         // 봉우리 주변에서 평균 낼 창 (스톱)
+    bandW: 0.75,        // 밝기 구간 폭 (스톱)
+    cellsFull: 8, domLo: 0.08, domHi: 0.4, // 구간 신뢰: 후보가 퍼진 칸 수와 후보 점유율
+    plausSoft: 4,       // 0에서 먼 후보를 덜 믿는 정도 (클수록 큰 캐스트도 잘 인정; 판별은 주로 구간 간 일관성이 맡음)
+    agreeFrac: 0.5,     // 장면 평균색이 캐스트 방향으로 이 비율 이상이면 완전히 믿음
+    tukey: 0.3,         // 구간 간 합의: 이보다(스톱) 벗어난 구간은 버림
+    consRms: 0.1,       // 구간들이 매끄러운 곡선에서 이만큼(스톱, RMS) 흩어지면 신뢰가 1/e로
+    endPowLo: 6, endPowHi: 2, // 양 끝 구간의 가중 1 − |2z|^p (어두운 쪽 p=endPowLo, 밝은 쪽 endPowHi): 기존 방식이 양 끝을 이미
+                        // 중성으로 맞춰 두어 그곳 후보는 정보가 적고, 특히 밝은 쪽은 하늘·전등 같은 유채색·발광체가 차지하기 쉬움
+    evidence: 2.0,      // 신뢰 1이 되는 데 필요한 '완전히 믿을 만한 구간' 수
+    shrink: 0.03,       // 전체 오프셋의 이만큼(스톱)은 두기: 큰 면이 기준 회색과 조금 어긋나 있을 때 과보정을 막는 보험
+    ridgeB: 0.01,       // 굽음 항의 안정화 (증거 합 대비)
+  },
+  sharpMul: 1.5,      // 선명화 양 배율 (디지털 사진처럼 윤곽을 또렷하게; 문턱이 잡음은 걸러 줌)
+  nrRad: 3,           // 색 잡음 줄이기 반경 (원본 해상도 픽셀): 필름의 색 얼룩은 밝기 그레인보다 굵음
+  nrChroma: 2.5,      // 색 잡음 문턱 (측정한 색 잡음의 배수): 너무 크면 잔 색 세부까지 뭉개져 물 빠져 보임
+  nrLumaRad: 2,       // 밝기 잡음 줄이기 반경 (원본 해상도 픽셀): 알갱이가 뭉친 그레인은 3×3으로는 분산을 못 재서 거의 안 줄어듦
+  nrLuma: 2.2, nrLumaMix: 0.75, // 밝기 잡음 문턱(배수)과 섞는 비율: 디지털 사진처럼 평탄한 면을 매끈하게, 다만 25%는 남겨 밀랍처럼 되지 않게
+  nrMinY: 0.004, nrMinC: 0.003, // 이보다 작은 그레인(부호화 값, 8비트 약 1단계)은 보이지 않으므로 줄이지 않음
+};
+const LUMW = [0.2126, 0.7152, 0.0722];
+// 2^v 표 (v = −4…4, 1/1024 간격): 국소 대비 배율용
+const EXP2 = new Float32Array(8193);
+for (let k = 0; k <= 8192; k++) EXP2[k] = Math.pow(2, k / 1024 - 4);
+// 넓은 범위 2^v 표 (v = −32…32, 1/128 간격, 선형 보간 시 상대 오차 약 4×10⁻⁶)
+const EXP2W = new Float64Array(64 * 128 + 2);
+for (let k = 0; k < EXP2W.length; k++) EXP2W[k] = Math.pow(2, k / 128 - 32);
+// 색도 축: τ = (R−B)/2 (호박–파랑), μ = (R+B)/2 − G (마젠타–초록, 단위 스톱). UI의 색온도(1,0,−1)·색조(½,−1,½) 축과 같은 정의
+
+// 히스토그램으로 구하는 분위수 (v의 앞 n개, lo…hi를 nb칸으로)
+function quantiles(v, n, lo, hi, nb, ps) {
+  const h = new Uint32Array(nb), sc = nb / (hi - lo);
+  for (let k = 0; k < n; k++) { let q = Math.floor((v[k] - lo) * sc); q = q < 0 ? 0 : q >= nb ? nb - 1 : q; h[q]++; }
+  return ps.map(p => {
+    const want = n * p; let acc = 0;
+    for (let q = 0; q < nb; q++) { acc += h[q]; if (acc >= want) return lo + (q + 0.5) / sc; }
+    return hi;
+  });
+}
+// 자기 자신을 안내 영상으로 쓰는 가이디드 필터 (He 등): 가장자리는 지키고 결은 평탄하게
+function guided(I, w, h, r, eps) {
+  const N = (2 * r + 1) * (2 * r + 1), n = w * h, II = new Float32Array(n);
+  for (let i = 0; i < n; i++) II[i] = I[i] * I[i];
+  const mI = boxSum(I, w, h, r), mII = boxSum(II, w, h, r), a = new Float32Array(n), b = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const m = mI[i] / N, v = Math.max(0, mII[i] / N - m * m), aa = v / (v + eps);
+    a[i] = aa; b[i] = m - aa * m;
+  }
+  const ma = boxSum(a, w, h, r), mb = boxSum(b, w, h, r), q = new Float32Array(n);
+  for (let i = 0; i < n; i++) q[i] = (ma[i] * I[i] + mb[i]) / N;
+  return q;
+}
+// 두 배열의 박스 합을 한 번에 (가장자리는 끝 값 연장). 메모리를 한 번만 훑어 따로 두 번 부르는 것보다 빠름.
+// 중간 배열(tA, tB)과 결과 배열(oA, oB)을 넘기면 새로 만들지 않고 씀 (모든 칸을 덮어쓰므로 비워 둘 필요 없음)
+function boxSum2(A, B, w, h, r, tA, tB, oA, oB) {
+  const n = w * h;
+  tA = tA || new Float32Array(n); tB = tB || new Float32Array(n); oA = oA || new Float32Array(n); oB = oB || new Float32Array(n);
+  if (r === 1 && w > 1) {
+    // 3×3 전용: 가로 3칸 합 → 세로 3칸 합 (누적합 없이 바로 더함)
+    for (let y = 0; y < h; y++) {
+      const o = y * w, e = o + w - 1;
+      tA[o] = 2 * A[o] + A[o + 1]; tB[o] = 2 * B[o] + B[o + 1];
+      for (let k = o + 1; k < e; k++) { tA[k] = A[k - 1] + A[k] + A[k + 1]; tB[k] = B[k - 1] + B[k] + B[k + 1]; }
+      tA[e] = A[e - 1] + 2 * A[e]; tB[e] = B[e - 1] + 2 * B[e];
+    }
+    for (let y = 0; y < h; y++) {
+      const o = y * w, u = (y > 0 ? y - 1 : 0) * w, d = (y < h - 1 ? y + 1 : y) * w;
+      for (let x = 0; x < w; x++) { oA[o + x] = tA[u + x] + tA[o + x] + tA[d + x]; oB[o + x] = tB[u + x] + tB[o + x] + tB[d + x]; }
+    }
+    return [oA, oB];
+  }
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    let a = 0, b = 0;
+    for (let x = -r; x <= r; x++) { const k = o + (x < 0 ? 0 : x >= w ? w - 1 : x); a += A[k]; b += B[k]; }
+    for (let x = 0; x < w; x++) {
+      tA[o + x] = a; tB[o + x] = b;
+      const xa = o + (x - r < 0 ? 0 : x - r), xb = o + (x + r + 1 >= w ? w - 1 : x + r + 1);
+      a += A[xb] - A[xa]; b += B[xb] - B[xa];
+    }
+  }
+  const rA = new Float64Array(w), rB = new Float64Array(w);
+  for (let y = -r; y <= r; y++) { const o = (y < 0 ? 0 : y >= h ? h - 1 : y) * w; for (let x = 0; x < w; x++) { rA[x] += tA[o + x]; rB[x] += tB[o + x]; } }
+  for (let y = 0; y < h; y++) {
+    const o = y * w, ya = (y - r < 0 ? 0 : y - r) * w, yb = (y + r + 1 >= h ? h - 1 : y + r + 1) * w;
+    for (let x = 0; x < w; x++) {
+      oA[o + x] = rA[x]; oB[o + x] = rB[x];
+      rA[x] += tA[yb + x] - tA[ya + x]; rB[x] += tB[yb + x] - tB[ya + x];
+    }
+  }
+  return [oA, oB];
+}
+// 안내 영상 I 하나로 두 입력 p, q를 거르는 가이디드 필터의 '평균 계수' (q̂ = A·I + B 의 A, B). I의 통계는 함께 씀
+function guidedCoefPair(I, p, q, w, h, r, eps) {
+  const N = (2 * r + 1) * (2 * r + 1), n = w * h;
+  const II = new Float32Array(n), Ip = new Float32Array(n), Iq = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const v = I[i]; II[i] = v * v; Ip[i] = v * p[i]; Iq[i] = v * q[i]; }
+  const tA = new Float32Array(n), tB = new Float32Array(n);   // 다섯 번의 박스 합이 함께 쓰는 중간 배열
+  const [mI, mII] = boxSum2(I, II, w, h, r, tA, tB), [mp, mq] = boxSum2(p, q, w, h, r, tA, tB), [mIp, mIq] = boxSum2(Ip, Iq, w, h, r, tA, tB);
+  const ap = II, bp = Ip, aq = Iq, bq = mII;   // 다 쓴 배열을 다시 씀 (mII는 i번째를 읽은 뒤에만 덮어씀)
+  for (let i = 0; i < n; i++) {
+    const m = mI[i] / N, v = mII[i] / N - m * m, d = 1 / ((v > 0 ? v : 0) + eps);
+    const pm = mp[i] / N, qm = mq[i] / N, a1 = (mIp[i] / N - m * pm) * d, a2 = (mIq[i] / N - m * qm) * d;
+    ap[i] = a1; bp[i] = pm - a1 * m; aq[i] = a2; bq[i] = qm - a2 * m;
+  }
+  const [Ap, Bp] = boxSum2(ap, bp, w, h, r, tA, tB, mp, mq), [Aq, Bq] = boxSum2(aq, bq, w, h, r, tA, tB, mIp, mIq);
+  const k = 1 / N;
+  for (let i = 0; i < n; i++) { Ap[i] *= k; Bp[i] *= k; Aq[i] *= k; Bq[i] *= k; }
+  return [Ap, Bp, Aq, Bq];
+}
+
+// ── 두 기울기 톤 곡선 ──
+// 로짓 공간에서 L(v) = lk + ns·(v − g(v)) + nh·g(v),  g(v) = k·(ln(1 + e^(v/k)) − ln 2),  v = ln(밝기 / 키)
+// 키(v=0) 아래는 기울기 ns, 위는 nh로 가고 폭 k 안에서 매끄럽게 이어짐. 출력 T = W / (1 + e^(−L))
+const aiG = v => { const z = v / AI.knee; return AI.knee * ((z > 30 ? z : Math.log1p(Math.exp(z))) - Math.LN2); };
+const aiL = (lk, ns, nh, v) => { const g = aiG(v); return lk + ns * (v - g) + nh * g; };
+// 검은점(vlo → bo)과 흰점(vhi → wo)을 맞추는 두 기울기. L이 ns, nh에 선형이라 2×2 연립으로 정확히 풂
+function aiSlopes(lk, vlo, vhi, bo, wo) {
+  const lbo = Math.log(bo / (1 - bo)) - lk, lwo = Math.log(wo / (1 - wo)) - lk;
+  const gl = aiG(vlo), gh = aiG(vhi), a11 = vlo - gl, a12 = gl, a21 = vhi - gh, a22 = gh;
+  const det = a11 * a22 - a12 * a21;
+  const cs = v => (!isFinite(v) ? 1.5 : v < AI.nsMin ? AI.nsMin : v > AI.nsMax ? AI.nsMax : v);
+  const ch = v => (!isFinite(v) ? 1.5 : v < AI.nhMin ? AI.nhMin : v > AI.nhMax ? AI.nhMax : v);
+  let ns = 1.5, nh = 1.5;
+  if (Math.abs(det) > 1e-9) { ns = (lbo * a22 - a12 * lwo) / det; nh = (a11 * lwo - lbo * a21) / det; }
+  // 한쪽이 범위를 넘으면 그쪽을 묶고, 다른 쪽을 자기 목표에 다시 맞춤
+  if (ch(nh) !== nh) { nh = ch(nh); if (Math.abs(a11) > 1e-9) ns = (lbo - a12 * nh) / a11; }
+  if (cs(ns) !== ns) { ns = cs(ns); if (Math.abs(a22) > 1e-9) nh = (lwo - a21 * ns) / a22; }
+  return [cs(ns), ch(nh)];
+}
+// 곡선 표: 키 기준 휘도 e(키 = 1) → 출력. e = 2^ex·(1 + j/256) 격자(옥타브마다 256칸), 픽셀에서는 float 비트로 칸을 바로 찾음
+const AIT_LO = -30, AIT_HI = 12, AIT_N = (AIT_HI - AIT_LO) * 256 + 1;
+const AI_F32 = new Float32Array(1), AI_I32 = new Int32Array(AI_F32.buffer);
+// bf(블랙 포인트 슬라이더)는 그림자 쪽 항 ns·(v − g)에만 배율을 걸되, 키 근처에서 σ(−v/knee)로 부드럽게 1로 이어 붙임:
+// 키(v = 0)는 그대로이고 곡선에 꺾임이 없으며, 키 위로는 영향이 빠르게 사라짐. bf = 1이면 aiL과 똑같음
+function aiCurveTable(lk, ns, nh, W, bf = 1) {
+  const T = new Float32Array(AIT_N);
+  for (let k = 0; k < AIT_N; k++) {
+    const e = Math.pow(2, AIT_LO + Math.floor(k / 256)) * (1 + (k % 256) / 256), v = Math.log(e);
+    let L;
+    if (bf === 1) L = aiL(lk, ns, nh, v);
+    else { const g = aiG(v); L = lk + ns * (v - g) * (1 + (bf - 1) / (1 + Math.exp(v / AI.knee))) + nh * g; }
+    T[k] = W / (1 + Math.exp(-L));
+  }
+  return T;
+}
+// 곡선 식 그대로 (분석용)
+const aiCurve = (lk, ns, nh, e) => (e > 0 ? 1 / (1 + Math.exp(-aiL(lk, ns, nh, Math.log(e)))) : 0);
+// 휘도 비율 보존 톤: 휘도에 곡선을 걸고 세 채널을 같은 배율로. 1을 넘는 채널이 생기면 휘도를 지키며 채도만 줄여 색역 안으로
+function aiTonePix(u0, u1, u2, t, out) {
+  const Y = 0.2126 * u0 + 0.7152 * u1 + 0.0722 * u2;
+  if (!(Y > 0)) { out[0] = out[1] = out[2] = 0; return; }
+  if (t >= 1) { out[0] = out[1] = out[2] = 1; return; }
+  const k = t / Y;
+  let r = u0 * k, g = u1 * k, b = u2 * k;
+  const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+  if (mx > 1) {   // aiRect와 같은 색역 처리 (휘도 유지와 색도 유지를 섞고, 흰색 근처에서는 휘도 유지만)
+    const sc = (1 - t) / (mx - t), gk = t <= 0.6 ? AI.gamutKeep : t >= 0.9 ? 0 : AI.gamutKeep * (0.9 - t) / 0.3, q = gk / mx, p = 1 - gk;
+    r = (t + (r - t) * sc) * p + r * q; g = (t + (g - t) * sc) * p + g * q; b = (t + (b - t) * sc) * p + b * q;
+  }
+  out[0] = r; out[1] = g; out[2] = b;
+}
+
+// 기존 방식을 슬라이더 중립으로 (Ai+의 출발점). 검은점 기준·채널 정규화는 권장값으로 고정
+const aiNeutral = s => ({ ...s, exposure: 0, contrast: 1, black: 0, white: 0, temp: 0, tint: 0, sat: 1, blackMode: DEF.blackMode, channelMode: DEF.channelMode });
+// 기존 방식의 채널별 정규화 로그 노출 x(0 = 그림자 기준, 1 = 하이라이트 기준)를 선형 빛 2^(S·(x−1))로.
+// S는 장면 범위(스톱). 채널별 정규화로 세 채널이 같은 스톱 범위를 갖게 됐으므로 모두 같은 S를 씀
+function aiLinLut(cp) {
+  const S = cp.S;
+  return [0, 1, 2].map(c => {
+    const L = new Float32Array(65536), l0 = cp.lb[c] - cp.dLo[c], inv = 1 / cp.rng[c], LL = cp.LL;
+    for (let i = 0; i < 65536; i++) L[i] = Math.pow(2, S * ((l0 - LL[i]) * inv - 1));
+    return L;
+  });
+}
+
+// 분석용 축소 지도: 기존 방식의 선형 출력을 칸마다 면적 평균. 필름이 아닌 픽셀은 가능하면 빼고 평균하고,
+// 필름 비율(V)과 '베이스 같은' 비율(Bf)도 기록
+function aiMapPos(P, lut, M) {
+  const d = P.d, W = P.w, H = P.h, L0 = lut[0], L1 = lut[1], L2 = lut[2];
+  const k = Math.max(1, Math.max(W, H) / AI_MAP);
+  const mw = Math.max(1, Math.round(W / k)), mh = Math.max(1, Math.round(H / k));
+  const Y3 = new Float32Array(mw * mh * 3), V = new Float32Array(mw * mh), Bf = new Float32Array(mw * mh), xa = new Int32Array(mw + 1);
+  for (let x = 0; x <= mw; x++) xa[x] = Math.min(W, Math.floor(x * W / mw));
+  const acc = new Float64Array(mw * 9);   // 칸마다 [필름 R,G,B,개수, 전체 R,G,B,개수, 베이스 같은 개수]
+  for (let y = 0; y < mh; y++) {
+    const ya = Math.floor(y * H / mh), yb = Math.max(ya + 1, Math.floor((y + 1) * H / mh));
+    acc.fill(0);
+    for (let sy = ya; sy < yb; sy++) {
+      const row = sy * W;
+      for (let x = 0; x < mw; x++) {
+        const a = xa[x], b = Math.max(a + 1, xa[x + 1]), q = x * 9;
+        for (let sx = a; sx < b; sx++) {
+          const k2 = row + sx, i = k2 * 3, r = L0[d[i]], g = L1[d[i + 1]], bl = L2[d[i + 2]], mk = M[k2];
+          acc[q + 4] += r; acc[q + 5] += g; acc[q + 6] += bl; acc[q + 7]++;
+          if (mk !== 1) { acc[q] += r; acc[q + 1] += g; acc[q + 2] += bl; acc[q + 3]++; }
+          if (mk === 2) acc[q + 8]++;
+        }
+      }
+    }
+    for (let x = 0; x < mw; x++) {
+      const q = x * 9, o = y * mw + x, nf = acc[q + 3], na = acc[q + 7];
+      V[o] = na > 0 ? nf / na : 0;
+      Bf[o] = na > 0 ? acc[q + 8] / na : 0;
+      const src = nf > 0 ? q : q + 4, nn = Math.max(1, nf > 0 ? nf : na);
+      for (let c = 0; c < 3; c++) Y3[o * 3 + c] = acc[src + c] / nn;
+    }
+  }
+  return { Y3, V, Bf, mw, mh };
+}
+// 통계 영역(자르기 − 테두리 여백 ∩ 필름 영역)을 지도 좌표로
+function aiRegion(P, s, area, mw, mh) {
+  const c = s.crop || { x: 0, y: 0, w: 1, h: 1 }, m = s.margin / 100, B = area.border;
+  let x0 = (c.x + c.w * m) * P.w, x1 = (c.x + c.w * (1 - m)) * P.w;
+  let y0 = (c.y + c.h * m) * P.h, y1 = (c.y + c.h * (1 - m)) * P.h;
+  const ix0 = Math.max(x0, B.x0), iy0 = Math.max(y0, B.y0), ix1 = Math.min(x1, B.x1), iy1 = Math.min(y1, B.y1);
+  if (ix1 - ix0 > 0 && iy1 - iy0 > 0 && (ix1 - ix0) * (iy1 - iy0) >= (x1 - x0) * (y1 - y0) * 0.05) { x0 = ix0; y0 = iy0; x1 = ix1; y1 = iy1; }
+  const kx = mw / P.w, ky = mh / P.h;
+  const r = { x0: clamp(Math.ceil(x0 * kx), 0, mw - 1), y0: clamp(Math.ceil(y0 * ky), 0, mh - 1) };
+  r.x1 = clamp(Math.floor(x1 * kx), r.x0 + 1, mw);
+  r.y1 = clamp(Math.floor(y1 * ky), r.y0 + 1, mh);
+  return r;
+}
+// 통계 픽셀 고르기: 영역 안의 필름 칸. 노광되지 않은 베이스(프레임 사이 여백)는 뺀다. 장면의 60% 넘게 그렇다면(야경 등) 둔다
+function aiValid(V, Bf, mw, R) {
+  const n = V.length, ok = new Uint8Array(n);
+  let nv = 0;
+  for (let y = R.y0; y < R.y1; y++) for (let x = R.x0; x < R.x1; x++) { const i = y * mw + x; if (V[i] > 0.6) { ok[i] = 1; nv++; } }
+  if (nv < 400) { nv = 0; for (let y = R.y0; y < R.y1; y++) for (let x = R.x0; x < R.x1; x++) { ok[y * mw + x] = 1; nv++; } }
+  let nb = 0;
+  for (let i = 0; i < n; i++) if (ok[i] && Bf[i] >= 0.5) nb++;
+  if (nb > 0 && nv - nb >= 0.4 * nv) { for (let i = 0; i < n; i++) if (ok[i] && Bf[i] >= 0.5) ok[i] = 0; nv -= nb; }
+  const VI = new Int32Array(nv);
+  for (let i = 0, k = 0; i < n; i++) if (ok[i]) VI[k++] = i;
+  return { ok, VI, nv };
+}
+
+// ── 분석의 단계별 함수 (뜨거운 반복문은 작은 함수로 나눠야 JS 엔진이 최적화함) ──
+function aiLumLog(Y3, n) {
+  const LY = new Float32Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    const y = 0.2126 * Y3[j] + 0.7152 * Y3[j + 1] + 0.0722 * Y3[j + 2];
+    LY[i] = Math.log2(y > 1e-5 ? y : 1e-5);
+  }
+  return LY;
+}
+function aiChanLog(Y3, n, eps, c) {
+  const L = new Float32Array(n);
+  for (let i = 0, j = c; i < n; i++, j += 3) L[i] = Math.log2(Y3[j] + eps);
+  return L;
+}
+function aiGather(src, VI, nv) {
+  const v = new Float32Array(nv);
+  for (let k = 0; k < nv; k++) v[k] = src[VI[k]];
+  return v;
+}
+// 2차원 격자를 이항 커널 [1,4,6,4,1]/16로 두 번 흐림 (봉우리 찾기용)
+function smooth2(G, w, h) {
+  const K = [1, 4, 6, 4, 1];
+  let a = G;
+  for (let pass = 0; pass < 2; pass++) {
+    const t = new Float32Array(w * h), o = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let j = -2; j <= 2; j++) { const xx = x + j; if (xx >= 0 && xx < w) s += K[j + 2] * a[y * w + xx]; }
+      t[y * w + x] = s / 16;
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let j = -2; j <= 2; j++) { const yy = y + j; if (yy >= 0 && yy < h) s += K[j + 2] * t[yy * w + x]; }
+      o[y * w + x] = s / 16;
+    }
+    a = o;
+  }
+  return a;
+}
+// 후보 누적: 픽셀마다 (색도, 밝기 구간, 가중치)를 기록하고 구간별 색도 격자에 더함.
+// 지도 위 cell×cell 칸 안에서는 한 색도 칸에 cap개까지만 세어, 큰 단색 면이 표를 독차지하지 못하게 함
+function aiCastGather(T, Mu, LY, TX, VI, nv, q01, span, K, mw, mh, C, grids, PT, PM, PK, PW, PC) {
+  const GT = Math.round(2 * C.tR / C.cs) + 1, GM = Math.round(2 * C.mR / C.cs) + 1, GN = GT * GM;
+  const cw = Math.ceil(mw / C.cell), st = 1 / (2 * C.sigT * C.sigT), sm = 1 / (2 * C.sigM * C.sigM);
+  const cellOf = new Int32Array(nv), cnt = new Uint8Array(K * GN), touched = new Int32Array(nv), idxOf = new Int32Array(nv).fill(-1);
+  for (let k = 0; k < nv; k++) {
+    const i = VI[k], kb = Math.floor((LY[i] - q01) / span * K);
+    PK[k] = kb < 0 || kb >= K ? -1 : kb;
+    const t = T[i], m = Mu[i];
+    PT[k] = t; PM[k] = m;
+    const tx = TX[i], wt = tx >= C.texFull ? 1 : C.texMin + (1 - C.texMin) * tx / C.texFull;
+    PW[k] = Math.exp(-t * t * st - m * m * sm) * wt;
+    const x = i % mw, y = (i / mw) | 0;
+    PC[k] = cellOf[k] = ((y / C.cell) | 0) * cw + ((x / C.cell) | 0);
+    if (PK[k] < 0) continue;
+    const gx = Math.round((t + C.tR) / C.cs), gy = Math.round((m + C.mR) / C.cs);
+    if (gx >= 0 && gx < GT && gy >= 0 && gy < GM) idxOf[k] = PK[k] * GN + gy * GT + gx;
+  }
+  // 칸(cell)별로 상한을 적용하려면 같은 칸의 픽셀을 모아야 함: 칸 번호로 계수 정렬 (같은 칸 안에서는 k 순서 유지,
+  // 비교 정렬보다 몇 배 빠름)
+  const nC = cw * Math.ceil(mh / C.cell), start = new Int32Array(nC + 1), order = new Int32Array(nv);
+  for (let k = 0; k < nv; k++) start[cellOf[k] + 1]++;
+  for (let c = 0; c < nC; c++) start[c + 1] += start[c];
+  for (let k = 0; k < nv; k++) order[start[cellOf[k]]++] = k;
+  let nt = 0, curCell = -1;
+  for (let q = 0; q < nv; q++) {
+    const k = order[q];
+    if (cellOf[k] !== curCell) { for (let j = 0; j < nt; j++) cnt[touched[j]] = 0; nt = 0; curCell = cellOf[k]; }
+    const idx = idxOf[k];
+    if (idx < 0) continue;
+    if (cnt[idx] === 0) touched[nt++] = idx;
+    if (cnt[idx] < C.cap) { cnt[idx]++; grids[PK[k]][idx - PK[k] * GN] += PW[k]; }
+  }
+  return { GT, GM };
+}
+// 구간마다 후보의 봉우리를 찾고 그 둘레 평균과 신뢰를 냄
+function aiCastBands(grids, GT, GM, K, PT, PM, PK, PW, PC, nv, nCells, C) {
+  const peakT = new Float32Array(K).fill(9), peakM = new Float32Array(K).fill(9);
+  for (let kb = 0; kb < K; kb++) {
+    const G = smooth2(grids[kb], GT, GM);
+    let best = 0, bx = -1, by = -1;
+    for (let gy = 2; gy < GM - 2; gy++) for (let gx = 2; gx < GT - 2; gx++) { const v = G[gy * GT + gx]; if (v > best) { best = v; bx = gx; by = gy; } }
+    if (best <= 0) continue;
+    peakT[kb] = bx * C.cs - C.tR; peakM[kb] = by * C.cs - C.mR;
+  }
+  const acc = new Float64Array(K * 4), cellHit = new Uint16Array(K * nCells);
+  for (let k = 0; k < nv; k++) {
+    const kb = PK[k];
+    if (kb < 0) continue;
+    acc[kb * 4 + 3] += PW[k];
+    if (peakT[kb] === 9) continue;
+    const dt = PT[k] - peakT[kb], dm = PM[k] - peakM[kb];
+    if (dt < C.win && dt > -C.win && dm < C.win && dm > -C.win) {
+      acc[kb * 4] += PW[k] * PT[k]; acc[kb * 4 + 1] += PW[k] * PM[k]; acc[kb * 4 + 2] += PW[k];
+      cellHit[kb * nCells + PC[k]]++;
+    }
+  }
+  const bands = [];
+  for (let kb = 0; kb < K; kb++) {
+    const wIn = acc[kb * 4 + 2], wAll = acc[kb * 4 + 3];
+    if (peakT[kb] === 9 || wIn <= 0 || wAll <= 0) continue;
+    let cells = 0;
+    for (let c = 0; c < nCells; c++) if (cellHit[kb * nCells + c] >= 4) cells++;
+    const dom = wIn / wAll, t = acc[kb * 4] / wIn, m = acc[kb * 4 + 1] / wIn;
+    // 후보가 0에서 멀수록(큰 유채색 면일 가능성) 덜 믿음. 큰 캐스트는 여러 구간의 일치로 증거를 쌓아야 함
+    const plaus = Math.exp(-(t * t / (2 * C.sigT * C.sigT) + m * m / (2 * C.sigM * C.sigM)) / C.plausSoft);
+    const conf = Math.min(1, cells / C.cellsFull) * clamp((dom - C.domLo) / (C.domHi - C.domLo), 0, 1) * plaus;
+    bands.push({ kb, z: (kb + 0.5) / K - 0.5, t, m, conf, dom, cells });
+  }
+  return bands;
+}
+// 구간별 값을 밝기의 함수 c(z) = p0 + pb·(1 − 4z²) 로 합의 (상수 + 가운데 굽음). 기울기 항은 두지 않음:
+// 양 끝은 기존 방식이 이미 중성으로 맞춰 두어 그곳 후보(하늘·전등)는 캐스트가 아닌 그 물체의 색이기 쉽고,
+// 필름 층 차이로 생기는 크로스오버는 양 끝이 0인 굽음이기 때문. 동떨어진 구간은 Tukey 가중으로 버림
+function aiCastFit(bands, key, C) {
+  const use = bands.filter(b => b.conf > 0.03), n = use.length;
+  if (!n) return { p: [0, 0], ev: 0, rms: 0 };
+  const y = use.map(b => b[key]), B = use.map(b => 1 - 4 * b.z * b.z);
+  const cw = use.map(b => b.conf * (1 - Math.pow(2 * Math.abs(b.z), b.z < 0 ? C.endPowLo : C.endPowHi)));
+  let w = cw.slice(), p0 = 0, pb = 0;
+  for (let it = 0; it < 6; it++) {
+    const sw = w.reduce((a, v) => a + v, 0), lam = n >= 3 ? C.ridgeB * sw : 1e9;   // 구간이 셋 미만이면 상수만
+    let a11 = 0, a12 = 0, a22 = lam, b1 = 0, b2 = 0;
+    for (let k = 0; k < n; k++) { a11 += w[k]; a12 += w[k] * B[k]; a22 += w[k] * B[k] * B[k]; b1 += w[k] * y[k]; b2 += w[k] * B[k] * y[k]; }
+    const det = a11 * a22 - a12 * a12;
+    if (Math.abs(det) > 1e-12) { p0 = (b1 * a22 - a12 * b2) / det; pb = (a11 * b2 - a12 * b1) / det; } else { p0 = a11 > 0 ? b1 / a11 : 0; pb = 0; }
+    for (let k = 0; k < n; k++) { const r = (y[k] - p0 - pb * B[k]) / C.tukey, u = 1 - r * r; w[k] = cw[k] * (u > 0 ? u * u : 0); }
+  }
+  const sw = w.reduce((a, v) => a + v, 0);
+  let ss = 0;
+  for (let k = 0; k < n; k++) { const r = y[k] - p0 - pb * B[k]; ss += w[k] * r * r; }
+  const rms = sw > 0 ? Math.sqrt(ss / sw) : 0, cons = Math.exp(-(rms / C.consRms) * (rms / C.consRms));
+  return { p: [p0, pb], ev: sw * cons, rms };
+}
+// 밝기(로그2)에 따른 캐스트 보정량 표 (채널별 오프셋, 스톱). 적합 범위 밖으로는 늘리지 않음
+function aiCastTable(mid, span, pT, pM, sT, sM, ambT) {
+  const N = 1024, lo = mid - span / 2, st = span / (N - 1), R = new Float32Array(N * 3);
+  for (let k = 0; k < N; k++) {
+    const z = k / (N - 1) - 0.5, B = 1 - 4 * z * z;
+    let tau = sT * (pT[0] + pT[1] * B) - ambT, mu = sM * (pM[0] + pM[1] * B);
+    tau = clamp(tau, -AI.castTCap, AI.castTCap); mu = clamp(mu, -AI.castMCap, AI.castMCap);
+    R[k * 3] = tau + mu / 3; R[k * 3 + 1] = -2 * mu / 3; R[k * 3 + 2] = -tau + mu / 3;
+  }
+  return { R, lo, inv: 1 / st, N };
+}
+// 화이트밸런스 분석 전체: 3×3 평균한 로그값의 색도 → 구간별 후보 봉우리 → 구간 간 합의 → 장면 평균색과의 일치로 신뢰 조정.
+// 결과는 밝기(로그2 휘도)에 따른 캐스트 (τ, μ)의 2차식과 그 신뢰
+function* aiCastG(L0, L1, L2, LY, VI, nv, mw, mh, q01, q99, q10, q95) {   // 단계마다 yield (백그라운드 썸네일용)
+  const C = AI.cast, n = mw * mh;
+  const B0 = boxSum(L0, mw, mh, 1), B1 = boxSum(L1, mw, mh, 1), B2 = boxSum(L2, mw, mh, 1);
+  const T = new Float32Array(n), Mu = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const r = B0[i] / 9, g = B1[i] / 9, b = B2[i] / 9; T[i] = (r - b) / 2; Mu[i] = (r + b) / 2 - g; }
+  // 결: 3×3 평균 밝기가 9×9 평균에서 벗어난 정도 (그레인은 평균으로 줄고, 하늘 같은 매끈한 면은 0에 가까움)
+  const BY = boxSum(LY, mw, mh, 1), BY9 = boxSum(LY, mw, mh, 4), TX = new Float32Array(n);
+  for (let i = 0; i < n; i++) TX[i] = Math.abs(BY[i] / 9 - BY9[i] / 81);
+  yield;
+  const span = Math.max(q99 - q01, 1), mid = (q01 + q99) / 2, K = clamp(Math.round(span / C.bandW), 4, 10);
+  const GT = Math.round(2 * C.tR / C.cs) + 1, GM = Math.round(2 * C.mR / C.cs) + 1;
+  const grids = [];
+  for (let kb = 0; kb < K; kb++) grids.push(new Float32Array(GT * GM));
+  const PT = new Float32Array(nv), PM = new Float32Array(nv), PK = new Int8Array(nv), PW = new Float32Array(nv), PC = new Int32Array(nv);
+  aiCastGather(T, Mu, LY, TX, VI, nv, q01, span, K, mw, mh, C, grids, PT, PM, PK, PW, PC);
+  yield;
+  const nCells = Math.ceil(mw / C.cell) * Math.ceil(mh / C.cell);
+  const bands = aiCastBands(grids, GT, GM, K, PT, PM, PK, PW, PC, nv, nCells, C);
+  const fT = aiCastFit(bands, 't', C), fM = aiCastFit(bands, 'm', C);
+  // 장면 평균색 (중간 밝기의 로그 색도 평균): 후보 합의가 가리키는 캐스트와 같은 방향일 때만, 그 비율만큼 믿음.
+  // 나무·잔디처럼 유채색 물체가 후보를 차지했을 때 장면 전체가 그 방향이 아니면 보정을 줄이는 안전장치
+  let gT = 0, gM = 0, gn = 0;
+  for (let k = 0; k < nv; k++) { const i = VI[k], l = LY[i]; if (l >= q10 && l <= q95) { gT += T[i]; gM += Mu[i]; gn++; } }
+  if (gn) { gT /= gn; gM /= gn; }
+  const agree = (g, c) => (Math.abs(c) < 0.02 ? 1 : g * c <= 0 ? 0 : Math.min(1, g / (C.agreeFrac * c)));
+  const evT = clamp(fT.ev / C.evidence, 0, 1), evM = clamp(fM.ev / C.evidence, 0, 1);
+  const sT = evT * agree(gT, fT.p[0] + fT.p[1]), sM = evM * agree(gM, fM.p[0] + fM.p[1]);   // 가운데(z = 0) 값과 비교
+  const soft = v => (v > C.shrink ? v - C.shrink : v < -C.shrink ? v + C.shrink : 0);
+  return { pT: [soft(fT.p[0]), fT.p[1]], pM: [soft(fM.p[0]), fM.p[1]], sT, sM, mid, span, bands, g: [gT, gM], ev: [evT, evM] };
+}
+// 화이트밸런스(밝기별 채널 오프셋 표 R)를 적용한 채널 로그값(BL), 휘도(LB, 로그2), 가장 밝은 채널(LM, 로그2)
+function aiBalance(L0, L1, L2, n, R, rlo, rinv, rN, BL, LB, LM) {
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    let yb = 0, mx = -Infinity;
+    for (let c = 0; c < 3; c++) {
+      const l = c === 0 ? L0[i] : c === 1 ? L1[i] : L2[i];
+      let q = Math.round((l - rlo) * rinv);
+      q = q < 0 ? 0 : q >= rN ? rN - 1 : q;
+      const v = l - R[q * 3 + c];
+      BL[j + c] = v;
+      if (v > mx) mx = v;
+      let f = (v + 32) * 128;
+      f = f < 0 ? 0 : f > 8191.999 ? 8191.999 : f;
+      const k = f | 0;
+      yb += (c === 0 ? 0.2126 : c === 1 ? 0.7152 : 0.0722) * (EXP2W[k] + (EXP2W[k + 1] - EXP2W[k]) * (f - k));
+    }
+    LB[i] = Math.log2(yb > 1e-5 ? yb : 1e-5);
+    LM[i] = mx;
+  }
+}
+// 중앙 가중(가장자리 0.25) 절사 로그 평균. 중앙값보다 1스톱 넘게 밝은 곳(하늘 등)은 스톱마다 0.3씩(최소 0.35배) 가볍게
+function aiCenterMean(LB, VI, nv, mw, lo, hi, cx, cy, sx2, sy2, med) {
+  let sw = 0, sl = 0;
+  for (let k = 0; k < nv; k++) {
+    const i = VI[k], l = LB[i];
+    if (l < lo || l > hi) continue;
+    const x = i % mw, y = (i / mw) | 0, dx = x - cx, dy = y - cy;
+    let w = 0.25 + 0.75 * Math.exp(-(dx * dx) / sx2 - (dy * dy) / sy2);
+    const ex = l - med - 1;
+    if (ex > 0) w *= ex > 2.1667 ? 0.35 : 1 - 0.3 * ex;
+    sw += w; sl += w * l;
+  }
+  return sw > 0 ? sl / sw : NaN;
+}
+// Ai+ 톤을 입혀 본 Lab 채도(C*)와 피부 픽셀 수 (step마다 하나)
+function aiColorStats(BL, VI, nv, step, lAvg, beta, lk, ns, nh, sv) {
+  let ns2 = 0, nsk = 0, nall = 0;
+  const o = [0, 0, 0], ib = 1 / (1 - beta);
+  for (let k = 0; k < nv; k += step) {
+    const j = VI[k] * 3;
+    nall++;
+    const u0 = Math.max(0, (Math.pow(2, BL[j] - lAvg) - beta) * ib), u1 = Math.max(0, (Math.pow(2, BL[j + 1] - lAvg) - beta) * ib), u2 = Math.max(0, (Math.pow(2, BL[j + 2] - lAvg) - beta) * ib);
+    aiTonePix(u0, u1, u2, aiCurve(lk, ns, nh, 0.2126 * u0 + 0.7152 * u1 + 0.0722 * u2), o);
+    const r = o[0], g = o[1], b = o[2];
+    const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b, mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    if (Y < 0.01 || mx > 0.97) continue;               // 아주 어둡거나 잘린 곳은 채도가 의미 없음
+    const fx = Math.cbrt((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047), fy = Math.cbrt(Y), fz = Math.cbrt((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+    const ca = 500 * (fx - fy), cb = 200 * (fy - fz);
+    sv[ns2++] = Math.sqrt(ca * ca + cb * cb);
+    const mn = r < g ? (r < b ? r : b) : (g < b ? g : b), s0 = (mx - mn) / mx;
+    if (r >= g && g >= b && r > b && s0 > 0.12 && s0 < 0.7) {
+      const h = (g - b) / (r - b);
+      if (h > 0.13 && h < 0.75) nsk++;
+    }
+  }
+  return [ns2, nsk, nall];
+}
+// Ai+ 톤을 입혀 본 휘도(로그2) — 국소 대비 지도용 (비율 보존이라 출력 휘도 = 곡선값)
+function aiOutLum(LB, n, lAvg, beta, lk, ns, nh) {
+  const lo = new Float32Array(n), ib = 1 / (1 - beta);
+  for (let i = 0; i < n; i++) {
+    const y = aiCurve(lk, ns, nh, Math.max(0, (Math.pow(2, LB[i] - lAvg) - beta) * ib));
+    lo[i] = Math.log2(y > 1e-4 ? y : 1e-4);
+  }
+  return lo;
+}
+// 국소 대비 지도 (스톱): 가이디드 필터로 뽑은 큰 구조와의 차(중간 크기 세부)를 키움. 가장자리는 필터가 지켜 후광이 없음.
+// 명암 범위가 넓은 장면은 큰 구조를 키(lk0 = log2 Ykey) 쪽으로 조금 당겨 역광 속 그림자·하늘을 함께 살림
+function aiDmap(lo, n, mw, mh, DR, lk0) {
+  const base = guided(lo, mw, mh, Math.max(2, Math.round(0.025 * Math.max(mw, mh))), 0.1), dmap = new Float32Array(n);
+  const cb = AI.baseComp * clamp((DR - 7) / 5, 0, 1);
+  for (let i = 0; i < n; i++) {
+    const v = AI.clarity * (lo[i] - base[i]) - cb * (base[i] - lk0);
+    dmap[i] = v < -1 ? -1 : v > 1 ? 1 : v;
+  }
+  return dmap;
+}
+// LUT에 쓸 채널 c의 '화이트밸런스 뒤 로그 밝기' (선형 빛 → 로그2 → 밝기별 캐스트 보정 빼기)
+function aiLx(linc, R, rlo, rinv, rN, c) {
+  const L = new Float32Array(65536), eps = AI.eps;
+  for (let i = 0; i < 65536; i++) {
+    const l = Math.log2(linc[i] + eps);
+    let q = Math.round((l - rlo) * rinv);
+    q = q < 0 ? 0 : q >= rN ? rN - 1 : q;
+    L[i] = l - R[q * 3 + c];
+  }
+  return L;
+}
+// 기존 방식(슬라이더 중립)이 정규화 로그 노출 x에서 내는 출력 반사율 — '밝기 ±EV' 표시용
+function aiClassicY(x) {
+  const R0 = paperR(0, PAPER_G), R1 = paperR(1, PAPER_G);
+  return Math.max((Math.pow(10, -PAPER_DMAX / (1 + Math.exp(PAPER_G * (x - PAPER_X0)))) - R0) / (R1 - R0), 1e-4);
+}
+
+// Ai+ 분석. cache는 축소 지도를 재사용하려고 넘기는 객체(지금 프레임이면 cur).
+// 본체는 단계마다 yield하는 생성기(백그라운드 썸네일이 단계 사이에 쉴 수 있게)이고, 보통 호출은 한 번에 끝까지 돎
+function aiAnalyze(P, s, an, area, cache) { return runSync(aiAnalyzeG(P, s, an, area, cache)); }
+function* aiAnalyzeG(P, s, an, area, cache) {
+  const cp = buildPipe(aiNeutral(s), an), lin = aiLinLut(cp);   // 출발점: 기존 방식의 필름 해석 (슬라이더 중립)
+  const mkey = [s.input, cp.base.map(Math.round).join(','), an.llLo.join(','), an.llHi.join(','), DEF.blackMode, DEF.channelMode].join('|');
+  if (!cache.aiMap || cache.aiMapFor !== area || cache.aiMapKey !== mkey) {
+    cache.aiMap = aiMapPos(P, lin, area.M); cache.aiMapFor = area; cache.aiMapKey = mkey;
+  }
+  yield;
+  const { Y3, V, Bf, mw, mh } = cache.aiMap, n = mw * mh;
+  const R = aiRegion(P, s, area, mw, mh), { ok, VI, nv } = aiValid(V, Bf, mw, R);
+  if (nv < 64) return null;
+
+  // 휘도(로그2)와 분위수, 채널 로그값
+  const LY = aiLumLog(Y3, n);
+  const L0 = aiChanLog(Y3, n, AI.eps, 0), L1 = aiChanLog(Y3, n, AI.eps, 1), L2 = aiChanLog(Y3, n, AI.eps, 2);
+
+  yield;
+  // ── 화이트밸런스: 밝기 구간별 중성 후보 합의 → 밝기에 따른 캐스트 (τ, μ)
+  const [q01, q10, q95, q99] = quantiles(aiGather(LY, VI, nv), nv, -17, 3, 4000, [0.01, 0.1, 0.95, 0.99]);
+  const cast = yield* aiCastG(L0, L1, L2, LY, VI, nv, mw, mh, q01, q99, q10, q95);
+  // 조명 분위기: 가운데 밝기의 캐스트 가운데 따뜻한 쪽은 카메라 자동 화밸처럼 일부 남김
+  const tauMid = clamp(cast.sT * (cast.pT[0] + cast.pT[1]), -AI.castTCap, AI.castTCap), muMid = clamp(cast.sM * (cast.pM[0] + cast.pM[1]), -AI.castMCap, AI.castMCap);
+  let ambT = 0;
+  if (tauMid > AI.ambDead) ambT = Math.min(AI.ambWarmCap, AI.ambWarm * (tauMid - AI.ambDead));
+  else if (tauMid < -AI.ambDead) ambT = -Math.min(AI.ambCoolCap, AI.ambCool * (-tauMid - AI.ambDead));
+  const RT = aiCastTable(cast.mid, cast.span, cast.pT, cast.pM, cast.sT, cast.sM, ambT);
+  let castMax = 0;
+  for (let k = 0; k < RT.N; k += 8) castMax = Math.max(castMax, Math.abs(RT.R[k * 3]), Math.abs(RT.R[k * 3 + 1]), Math.abs(RT.R[k * 3 + 2]));
+
+  yield;
+  // ── 톤 통계 (화이트밸런스 뒤)
+  const BL = new Float32Array(n * 3), LB = new Float32Array(n), LM = new Float32Array(n);
+  aiBalance(L0, L1, L2, n, RT.R, RT.lo, RT.inv, RT.N, BL, LB, LM);
+  const [lLo, p01, lMed, p99, lHi] = quantiles(aiGather(LB, VI, nv), nv, -17, 3, 4000, [0.005, 0.01, 0.5, 0.99, 0.995]);
+  const [mHi] = quantiles(aiGather(LM, VI, nv), nv, -17, 3, 4000, [0.995]);
+  // 계측: 중앙 가중 로그 평균. 넓은 하늘처럼 훨씬 밝은 곳이 노출을 끌어내리지 않게
+  let lAvg = aiCenterMean(LB, VI, nv, mw, p01, p99, (R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2,
+    2 * Math.pow(0.33 * (R.x1 - R.x0), 2), 2 * Math.pow(0.33 * (R.y1 - R.y0), 2), lMed);
+  if (!isFinite(lAvg)) lAvg = (lLo + lHi) / 2;
+  const DR = lHi - lLo;
+  // 장면 키 (Reinhard): 로그 평균이 범위의 어디에 있는지. 보통 장면(가운데 부근)은 모두 같은 밝기로, 분명한 하이키·로우키만 따름
+  const f = clamp((2 * lAvg - lLo - lHi) / Math.max(DR, 4), -0.8, 0.8);
+  const fd = f > AI.keyDead ? f - AI.keyDead : f < -AI.keyDead ? f + AI.keyDead : 0;
+  const Ykey = clamp(AI.keyOut * Math.pow(4, fd >= 0 ? AI.keyUp * fd : AI.keyDown * fd - AI.keyDown2 * fd * fd), AI.keyMin, AI.keyMax), lk = Math.log(Ykey / (1 - Ykey));
+
+  // ── 톤 곡선 (휘도): 키 → Ykey, 그림자(0.5%) → bT, 밝은 곳(99.5%) → whiteOut.
+  //    bT는 명암 범위가 8스톱보다 좁을수록 스톱마다 2^0.7배 덜 깊게 (좁은 장면을 억지로 늘려 그림자 색이 묻히지 않게).
+  //    기울기를 최대로 해도 그림자가 뜨면(안개·플레어) 선형 베일 β(키 기준)를 빼서 걷어 냄
+  const bT = AI.blackOut * Math.pow(2, AI.blackRelax * clamp(AI.blackDR - DR, 0, AI.blackSpan)), lbo = Math.log(bT / (1 - bT));
+  const xlo0 = Math.pow(2, lLo - lAvg), xhi0 = Math.pow(2, lHi - lAvg);
+  let beta = 0, ns = 1.3, nh = 1.3;
+  for (let it = 0; it < 4; it++) {
+    const ib = 1 / (1 - beta);
+    const vlo = Math.min(Math.log(Math.max((xlo0 - beta) * ib, 1e-7)), -0.5), vhi = Math.max(Math.log(Math.max((xhi0 - beta) * ib, 1e-7)), 0.3);
+    [ns, nh] = aiSlopes(lk, vlo, vhi, bT, AI.whiteOut);
+    if (aiL(lk, ns, nh, Math.log(xlo0)) <= lbo + 0.05) { beta = 0; break; }   // 베일 없이도 검은점에 닿음
+    let a = -30, b = 0;                                                       // 곡선이 bT를 내는 입력 xb (이분법)
+    for (let j = 0; j < 50; j++) { const mid = (a + b) / 2; if (aiL(lk, ns, nh, mid) < lbo) a = mid; else b = mid; }
+    const xb = Math.exp((a + b) / 2), full = xlo0 > xb ? (xlo0 - xb) / (1 - xb) : 0;
+    beta = clamp(AI.dehaze * full, 0, Math.min(0.6, 0.8 * xlo0));
+  }
+
+  yield;
+  // ── 채도 평준화와 피부 비율
+  const sv = new Float32Array(nv);
+  const [ns2, nsk, nall] = aiColorStats(BL, VI, nv, 3, lAvg, beta, lk, ns, nh, sv);
+  const C75 = ns2 > 50 ? quantiles(sv, ns2, 0, 150, 1500, [0.75])[0] : 0;
+  // 채도 상한은 명암 범위로: 안개처럼 흐린 장면은 satMax, 맑은 장면은 satMaxClear까지 (사이는 선형)
+  const satCap = AI.satMax + (AI.satMaxClear - AI.satMax) * clamp((DR - (AI.blackDR - AI.blackSpan)) / AI.blackSpan, 0, 1);
+  const sigma = C75 < 3 ? 1.05 : clamp(Math.pow(AI.chromaTarget / C75, 0.5), AI.satMin, satCap);
+  const skinFrac = nsk / Math.max(nall, 1);
+
+  yield;
+  // ── 국소 대비 지도 (스톱)
+  const OL = aiOutLum(LB, n, lAvg, beta, lk, ns, nh);
+  yield;
+  const dmap = aiDmap(OL, n, mw, mh, DR, Math.log2(Ykey));
+
+  yield;
+  // ── LUT에 쓸 채널별 '화이트밸런스 뒤 로그 밝기'
+  const lx = [0, 1, 2].map(c => aiLx(lin[c], RT.R, RT.lo, RT.inv, RT.N, c));
+
+  // 장면 설명: 실제로 한 보정만
+  const labels = [];
+  if (castMax > 0.04) {
+    // 가운데 밝기에서 실제로 뺀 양을 색온도·색조 슬라이더 단위로 환산 (슬라이더를 반대로 움직이면 되돌아감).
+    // 뺀 채널 오프셋 (τ + μ/3, −2μ/3, −τ + μ/3)은 색온도 −τ, 색조 −2μ/3을 더한 것과 같음
+    const tEq = -(tauMid - ambT), nEq = -2 * muMid / 3, part = [];
+    if (Math.abs(tEq) >= 0.02) part.push('색온도 ' + sgn(tEq, 2));
+    if (Math.abs(nEq) >= 0.02) part.push('색조 ' + sgn(nEq, 2));
+    const amt = part.length ? part.join(', ') + ' 상당' : '밝기별';
+    labels.push('화밸 보정(' + amt + (ambT > 0.05 ? ', 따뜻함 일부 유지' : '') + ')');
+  }
+  const dEV = Math.log2(Ykey / aiClassicY(1 + lAvg / cp.S));   // 같은 계측 지점의 기존 방식 밝기와 비교
+  if (Math.abs(dEV) >= 0.15) labels.push('밝기 ' + (dEV > 0 ? '+' : '−') + Math.abs(dEV).toFixed(1) + 'EV');
+  if (fd > 0.2) labels.push('밝은 장면 유지'); else if (fd < -0.2) labels.push('어두운 장면 유지');
+  if (beta > 0.1) labels.push('안개 걷기');
+  if (DR > 9) labels.push('명암 압축');
+  if (sigma >= 1.04) labels.push('채도 +' + Math.round((sigma - 1) * 100) + '%'); else if (sigma <= 0.96) labels.push('채도 −' + Math.round((1 - sigma) * 100) + '%');
+
+  return {
+    cp, lx, RT, lKey: lAvg, Ykey, lk, ns, nh, beta, sigma, dmap, mw, mh, labels, grain: undefined,
+    stats: { tauMid, muMid, ambT, castMax, cast, f, fd, DR, lLo, lHi, mHi, lAvg, lMed, bT, skinFrac, C75, nv, dEV },
+  };
+}
+
+// Ai+ 파이프라인: 채널마다 '기존 방식 출력 → 화이트밸런스 → 노출 → 베일 빼기'를 하나의 LUT(키 = 1인 선형값)로,
+// 톤 곡선은 픽셀에서 휘도에. 슬라이더는 Ai+ 결과에 더하는 오프셋
+function buildPipeAi(s, an, ai) {
+  const wbU = [s.temp + 0.5 * s.tint, -s.tint, -s.temp + 0.5 * s.tint];
+  const W = clamp(1 - 0.5 * s.white, 0.85, 1.25), beta = clamp(ai.beta, -0.02, 0.6), ib = 1 / (1 - beta);
+  // 블랙 포인트: 키 아래(그림자 쪽) 곡선 기울기에만 배율을 걸어 그림자 깊이를 바꿈. 중간 밝기(키)와 흰색은 그대로.
+  // 슬라이더 끝(+0.3 / −0.2)에서 배율 약 1.37 / 0.71 — 기존 방식의 같은 슬라이더와 비슷한 체감 폭
+  const bf = Math.pow(2, (s.black >= 0 ? 1.5 : 2.5) * s.black);
+  const TY = aiCurveTable(ai.lk, ai.ns * s.contrast, ai.nh * s.contrast, W, bf);
+  const lut = [];
+  for (let c = 0; c < 3; c++) {
+    const L = ai.lx[c], T = new Float32Array(65536), off = wbU[c] + s.exposure - ai.lKey;
+    for (let i = 0; i < 65536; i++) { const u = (Math.pow(2, L[i] + off) - beta) * ib; T[i] = u > 0 ? u : 0; }
+    lut.push(T);
+  }
+  const cp = ai.cp;
+  return {
+    mode: 'ai', lut, TY, ai, LL: cp.LL, base: cp.base, rng: cp.rng, S: cp.S, sat: ai.sigma * s.sat, vib: AI.vib,
+    pre: (c, code) => ai.lx[c][code],   // 사용자 색온도·색조 이전의 로그 밝기 (스톱, 회색 스포이트용)
+  };
+}
+
+// Ai+ 픽셀 처리: LUT(화밸·노출) → 휘도 톤(채널 비 보존, 색역 압축) → 바이브런스·채도 → 국소 대비 → sRGB 부호화.
+// buf(부호화 값 0–1, 3채널)에 채우거나, out8을 주면 캔버스용 8비트 RGBA에 바로 씀
+function aiRect(src, W, H, x0, y0, pw, ph, pp, buf, out8) {
+  const L0 = pp.lut[0], L1 = pp.lut[1], L2 = pp.lut[2], TY = pp.TY, F32 = AI_F32, I32 = AI_I32, TLAST = AIT_N - 1;
+  const ai = pp.ai, D = ai.dmap, mw = ai.mw, mh = ai.mh, kx = mw / W, ky = mh / H;
+  const sat = pp.sat, vib = pp.vib, to8 = !!out8, NLO = AI.neutralLo, NINV = 1 / (AI.neutralHi - AI.neutralLo), GKEEP = AI.gamutKeep;
+  // 국소 대비 지도의 열 좌표(왼쪽 칸, 가중치)는 열마다 한 번, 행 보간은 행마다 한 번
+  const XA = new Int32Array(pw), WX = new Float32Array(pw), Drow = new Float32Array(mw + 1);
+  for (let k = 0; k < pw; k++) {
+    let fx = (x0 + k + 0.5) * kx - 0.5;
+    fx = fx < 0 ? 0 : fx > mw - 1 ? mw - 1 : fx;
+    XA[k] = fx | 0; WX[k] = fx - (fx | 0);
+  }
+  let o = 0;
+  for (let y = y0; y < y0 + ph; y++) {
+    let fy = (y + 0.5) * ky - 0.5;
+    fy = fy < 0 ? 0 : fy > mh - 1 ? mh - 1 : fy;
+    const ya = fy | 0, yb = ya + 1 < mh ? ya + 1 : ya, wy = fy - ya, ra = ya * mw, rb = yb * mw;
+    for (let m = 0; m < mw; m++) Drow[m] = D[ra + m] + (D[rb + m] - D[ra + m]) * wy;
+    Drow[mw] = Drow[mw - 1];
+    let i = (y * W + x0) * 3;
+    for (let x = x0, kx2 = 0; x < x0 + pw; x++, kx2++, i += 3) {
+      const u0 = L0[src[i]], u1 = L1[src[i + 1]], u2 = L2[src[i + 2]];
+      const Yu = 0.2126 * u0 + 0.7152 * u1 + 0.0722 * u2;
+      let r = 0, g = 0, b = 0;
+      if (Yu > 0) {
+        // 곡선 표 조회 (float 비트로 log2 칸 찾기)
+        F32[0] = Yu;
+        const bits = I32[0], ex = (bits >> 23) - 127;
+        let t;
+        if (ex < AIT_LO) t = TY[0];
+        else if (ex >= AIT_HI) t = TY[TLAST];
+        else {
+          const mb = bits & 0x7fffff, kk = (ex - AIT_LO) * 256 + (mb >> 15);
+          t = TY[kk] + (TY[kk + 1] - TY[kk]) * ((mb & 0x7fff) * 0.000030517578125);
+        }
+        if (t >= 1) r = g = b = 1;
+        else {
+          const k = t / Yu;
+          r = u0 * k; g = u1 * k; b = u2 * k;
+          const m1 = r > g ? (r > b ? r : b) : (g > b ? g : b);
+          if (m1 > 1) {
+            // 색역 밖(밝고 선명한 색): 휘도를 지키며 회색 쪽으로 당기는 방식과 색도(채널 비)를 지키며 전체를 낮추는 방식을 섞음.
+            // 흰색에 가까울수록(t 0.6 → 0.9) 섞는 비율을 0으로: 잘린 하이라이트·필름 밖 빛은 카메라처럼 흰색으로 날림
+            const sc = (1 - t) / (m1 - t), gk = t <= 0.6 ? GKEEP : t >= 0.9 ? 0 : GKEEP * (0.9 - t) / 0.3, q = gk / m1, p = 1 - gk;
+            r = (t + (r - t) * sc) * p + r * q; g = (t + (g - t) * sc) * p + g * q; b = (t + (b - t) * sc) * p + b * q;
+          }
+        }
+      }
+
+      // 바이브런스·채도: 덜 선명한 색을 더 올리고 피부색은 아낌. 휘도는 그대로, 색역을 넘으면 넘지 않는 만큼만
+      const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const mx = r > g ? (r > b ? r : b) : (g > b ? g : b), mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      if (mx > mn) {
+        const s0 = (mx - mn) / mx;
+        let sk = 0;
+        if (r >= g && g >= b && s0 > 0.1 && s0 < 0.75) {
+          const h = (g - b) / (r - b);               // 0 = 빨강, 1 = 노랑 (0°–60°), 피부는 약 8°–45°
+          if (h > 0.13 && h < 0.75) sk = 1 - Math.abs(h - 0.44) / 0.31;
+        }
+        const q = 1 - s0;
+        let fct = (1 + vib * q * q * (1 - 0.7 * sk)) * (1 + (sat - 1) * (1 - 0.6 * sk));
+        if (fct > 1) {
+          // 무채색 보호: 거의 회색인 픽셀은 채도를 올리지 않음 (내리는 쪽, 예컨대 채도 슬라이더 0은 그대로 적용)
+          let nz = (s0 - NLO) * NINV;
+          nz = nz < 0 ? 0 : nz > 1 ? 1 : nz;
+          fct = 1 + (fct - 1) * nz * nz * (3 - 2 * nz);
+        }
+        let nr = Y + (r - Y) * fct, ng = Y + (g - Y) * fct, nb = Y + (b - Y) * fct;
+        if (nr < 0 || nr > 1 || ng < 0 || ng > 1 || nb < 0 || nb > 1) {
+          // 드문 경우만 나눗셈: 채널마다 색역 경계까지의 배율 중 가장 작은 값
+          let dd = r - Y;
+          if (dd > 1e-9) { const t = (1 - Y) / dd; if (t < fct) fct = t; } else if (dd < -1e-9) { const t = Y / -dd; if (t < fct) fct = t; }
+          dd = g - Y;
+          if (dd > 1e-9) { const t = (1 - Y) / dd; if (t < fct) fct = t; } else if (dd < -1e-9) { const t = Y / -dd; if (t < fct) fct = t; }
+          dd = b - Y;
+          if (dd > 1e-9) { const t = (1 - Y) / dd; if (t < fct) fct = t; } else if (dd < -1e-9) { const t = Y / -dd; if (t < fct) fct = t; }
+          if (fct < 0) fct = 0;
+          nr = Y + (r - Y) * fct; ng = Y + (g - Y) * fct; nb = Y + (b - Y) * fct;
+        }
+        r = nr; g = ng; b = nb;
+      }
+
+      // 국소 대비: 지도에서 쌍선형 보간한 스톱 값. 밝기 양 끝(검정·흰색 근처)에서는 약하게
+      const xa = XA[kx2], dl = Drow[xa] + (Drow[xa + 1] - Drow[xa]) * WX[kx2];
+      if (dl > 1e-4 || dl < -1e-4) {
+        const yp = Y <= 0 ? 0 : Y >= 1 ? 1 : ENC[(Y * 65535 + 0.5) | 0];
+        let w = 5.2 * yp * (1 - yp);
+        if (w > 1) w = 1;
+        let gn = EXP2[((dl * w + 4) * 1024 + 0.5) | 0];
+        const m2 = r > g ? (r > b ? r : b) : (g > b ? g : b);
+        if (m2 * gn > 1 && m2 > 0) gn = 1 / m2;
+        r *= gn; g *= gn; b *= gn;
+      }
+      r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+      const ir = (r * 65535 + 0.5) | 0, ig = (g * 65535 + 0.5) | 0, ib = (b * 65535 + 0.5) | 0;
+      if (to8) { out8[o] = ENC8[ir]; out8[o + 1] = ENC8[ig]; out8[o + 2] = ENC8[ib]; o += 4; }
+      else { buf[o] = ENC[ir]; buf[o + 1] = ENC[ig]; buf[o + 2] = ENC[ib]; o += 3; }
+    }
+  }
+}
+
+// 그레인 측정: 원본 해상도 가운데 256×256 블록을 Ai+로 처리해(잡음 줄이기·선명화 전), 평탄한 타일의
+// 그레인 측정 (sRGB 부호화 값): 화상 가운데와 네 사분면 중심의 256×256 블록을 렌더해, 16×16 타일마다 5×5 평균을 뺀 나머지의
+// 표준편차를 재고 평탄한 쪽(하위 25%) 타일 값을 씀. 5×5 고역이라 알갱이가 몇 픽셀로 뭉친 실제 그레인도 그 크기까지 셈
+// (라플라시안은 픽셀 단위 잡음만 세어 뭉친 그레인을 크게 과소평가함). 잡음 줄이기 문턱과 선명화 문턱의 기준
+function aiGrain(F, pp) {
+  const bw = Math.min(256, F.w), bh = Math.min(256, F.h);
+  if (bw < 40 || bh < 40) return { y: 0, c: 0 };
+  const n = bw * bh, buf = new Float32Array(n * 3), Y = new Float32Array(n), U = new Float32Array(n), Vv = new Float32Array(n);
+  const sy = [], su = [], sv = [], TS = 16;
+  const est = (A, out) => {
+    const B = boxSum(A, bw, bh, 2);
+    for (let ty = 2; ty + TS < bh - 2; ty += TS) for (let tx = 2; tx + TS < bw - 2; tx += TS) {
+      let s = 0, s2 = 0, m = 0;
+      for (let y = ty; y < ty + TS; y++) for (let x = tx; x < tx + TS; x++) { const i = y * bw + x, d = A[i] - B[i] / 25; s += d; s2 += d * d; m++; }
+      const v = s2 / m - (s / m) * (s / m);
+      out.push(Math.sqrt(Math.max(0, v) / (1 - 1 / 25)));   // 순수 잡음이면 (A − 평균5×5)의 분산 = σ²(1 − 1/25)
+    }
+  };
+  const cx = [0.5, 0.25, 0.75, 0.25, 0.75], cy = [0.5, 0.25, 0.25, 0.75, 0.75];
+  for (let q = 0; q < 5; q++) {
+    const x0 = clamp(Math.round(F.w * cx[q] - bw / 2), 0, F.w - bw), y0 = clamp(Math.round(F.h * cy[q] - bh / 2), 0, F.h - bh);
+    aiRect(F.d, F.w, F.h, x0, y0, bw, bh, pp, buf);
+    for (let i = 0, j = 0; i < n; i++, j += 3) {
+      const y = 0.2126 * buf[j] + 0.7152 * buf[j + 1] + 0.0722 * buf[j + 2];
+      Y[i] = y; U[i] = buf[j + 2] - y; Vv[i] = buf[j] - y;
+    }
+    est(Y, sy); est(U, su); est(Vv, sv);
+  }
+  const q25 = arr => { if (!arr.length) return 0; arr.sort((a, b) => a - b); return arr[Math.floor(arr.length * 0.25)]; };
+  return { y: q25(sy), c: Math.max(q25(su), q25(sv)) };
+}
+// 밝기 잡음: 자기 안내 가이디드 필터(반경 r)를 mix만큼 섞음 (그레인을 다 지우면 밀랍처럼 보여 일부만).
+// s1, s2는 호출하는 쪽에서 다 쓴 배열(없으면 새로 만듦)
+function aiLumaNR(Y, w, h, r, eps, mix, s1, s2) {
+  const N = (2 * r + 1) * (2 * r + 1), n = w * h, II = s1 || new Float32Array(n), b = s2 || new Float32Array(n);
+  for (let i = 0; i < n; i++) II[i] = Y[i] * Y[i];
+  const tA = new Float32Array(n), tB = new Float32Array(n);
+  const [mI, mII] = boxSum2(Y, II, w, h, r, tA, tB), a = II;
+  for (let i = 0; i < n; i++) {
+    const m = mI[i] / N, v = Math.max(0, mII[i] / N - m * m), aa = v / (v + eps);
+    a[i] = aa; b[i] = m - aa * m;
+  }
+  const [ma, mb] = boxSum2(a, b, w, h, r, tA, tB, mI, mII), out = ma;
+  for (let i = 0; i < n; i++) { const y = Y[i]; out[i] = y + ((ma[i] * y + mb[i]) / N - y) * mix; }
+  return out;
+}
+// 잡음 줄이기 (sRGB 부호화 값에서): 밝기 잡음은 가볍게, 색 얼룩 잡음은 밝기를 안내 영상으로 한 가이디드 필터로 거의 없앰.
+// 색은 빠른 가이디드 필터(He·Sun 2015): 계수를 반해상도에서 구해 쌍선형으로 키운 뒤 원해상도 밝기에 적용해, 윤곽은 원해상도로 지킴.
+// buf의 원점은 전체 화상에서 짝수 좌표여야 함(processRect가 맞춤) — 반해상도 격자가 어디서나 같아야 미리보기·확대경·
+// 띠 단위 내보내기가 같은 결과를 냄
+function aiDenoise(buf, w, h, nr) {
+  const n = w * h, Y = new Float32Array(n), U = new Float32Array(n), V = new Float32Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    const y = 0.2126 * buf[j] + 0.7152 * buf[j + 1] + 0.0722 * buf[j + 2];
+    Y[i] = y; U[i] = buf[j + 2] - y; V[i] = buf[j] - y;
+  }
+  if (!(nr.rc > 0)) {
+    // 색 잡음이 작아 밝기만 줄임: 색차(U, V)는 그대로 두고 밝기만 바꿔 다시 합침
+    const Yf = aiLumaNR(Y, w, h, nr.rl, nr.el, nr.ml);
+    for (let i = 0, j = 0; i < n; i++, j += 3) {
+      const yy = Yf[i], r = yy + V[i], b = yy + U[i], gg = (yy - 0.2126 * r - 0.0722 * b) / 0.7152;
+      buf[j] = r < 0 ? 0 : r > 1 ? 1 : r; buf[j + 1] = gg < 0 ? 0 : gg > 1 ? 1 : gg; buf[j + 2] = b < 0 ? 0 : b > 1 ? 1 : b;
+    }
+    return;
+  }
+  // 반해상도로 (2×2 평균, 홀수 끝은 있는 픽셀만)
+  const w2 = (w + 1) >> 1, h2 = (h + 1) >> 1, n2 = w2 * h2;
+  const Y2 = new Float32Array(n2), U2 = new Float32Array(n2), V2 = new Float32Array(n2);
+  for (let y2 = 0; y2 < h2; y2++) {
+    const ya = 2 * y2, yb = ya + 1 < h ? ya + 1 : ya;
+    for (let x2 = 0; x2 < w2; x2++) {
+      const xa = 2 * x2, xb = xa + 1 < w ? xa + 1 : xa, i00 = ya * w + xa, i01 = ya * w + xb, i10 = yb * w + xa, i11 = yb * w + xb, o = y2 * w2 + x2;
+      Y2[o] = 0.25 * (Y[i00] + Y[i01] + Y[i10] + Y[i11]);
+      U2[o] = 0.25 * (U[i00] + U[i01] + U[i10] + U[i11]);
+      V2[o] = 0.25 * (V[i00] + V[i01] + V[i10] + V[i11]);
+    }
+  }
+  // 원해상도 U, V는 이제 다 썼으므로 밝기 잡음 줄이기의 작업 배열로 씀
+  const Yf = nr.rl > 0 && nr.ml > 0 ? aiLumaNR(Y, w, h, nr.rl, nr.el, nr.ml, U, V) : Y;
+  const [Au, Bu, Av, Bv] = guidedCoefPair(Y2, U2, V2, w2, h2, Math.max(1, Math.round(nr.rc / 2)), nr.ec);
+  // 계수를 원해상도로 쌍선형 보간 (반해상도 칸 k의 중심 = 원해상도 2k + 0.5)
+  const XA = new Int32Array(w), XB = new Int32Array(w), WX = new Float32Array(w);
+  for (let x = 0; x < w; x++) {
+    let f = (x + 0.5) / 2 - 0.5;
+    f = f < 0 ? 0 : f > w2 - 1 ? w2 - 1 : f;
+    const a = f | 0;
+    XA[x] = a; XB[x] = a + 1 < w2 ? a + 1 : a; WX[x] = f - a;
+  }
+  // 반해상도 행마다 가로 보간을 한 번만 해 두고(위·아래 두 행), 원해상도 행에서는 세로로만 섞음
+  const CO = [Au, Bu, Av, Bv], mk = () => CO.map(() => new Float32Array(w));
+  const fill = (R, row) => {
+    const o = row * w2;
+    for (let c = 0; c < 4; c++) {
+      const S = CO[c], D = R[c];
+      for (let x = 0; x < w; x++) { const a = S[o + XA[x]]; D[x] = a + (S[o + XB[x]] - a) * WX[x]; }
+    }
+  };
+  let Ra = mk(), Rb = mk(), ca = -1, cb = -1;
+  for (let y = 0; y < h; y++) {
+    let f = (y + 0.5) / 2 - 0.5;
+    f = f < 0 ? 0 : f > h2 - 1 ? h2 - 1 : f;
+    const ya = f | 0, yb = ya + 1 < h2 ? ya + 1 : ya, wy = f - ya;
+    if (ya !== ca) {
+      if (ya === cb) { const t = Ra; Ra = Rb; Rb = t; ca = cb; cb = -1; }
+      else { fill(Ra, ya); ca = ya; }
+    }
+    if (yb !== cb) { fill(Rb, yb); cb = yb; }
+    const au0 = Ra[0], bu0 = Ra[1], av0 = Ra[2], bv0 = Ra[3], au1 = Rb[0], bu1 = Rb[1], av1 = Rb[2], bv1 = Rb[3];
+    for (let x = 0, i = y * w, j = i * 3; x < w; x++, i++, j += 3) {
+      const g = Y[i];   // 안내 영상: 거르기 전 밝기
+      const u = (au0[x] + (au1[x] - au0[x]) * wy) * g + bu0[x] + (bu1[x] - bu0[x]) * wy;
+      const v = (av0[x] + (av1[x] - av0[x]) * wy) * g + bv0[x] + (bv1[x] - bv0[x]) * wy;
+      const yy = Yf[i], r = yy + v, b = yy + u, gg = (yy - 0.2126 * r - 0.0722 * b) / 0.7152;
+      buf[j] = r < 0 ? 0 : r > 1 ? 1 : r; buf[j + 1] = gg < 0 ? 0 : gg > 1 ? 1 : gg; buf[j + 2] = b < 0 ? 0 : b > 1 ? 1 : b;
+    }
+  }
+}
+
+// ───────── 인코더: PNG 16비트, ZIP(무압축) ─────────
+function pngChunk(type, data) {
+  const head = new Uint8Array(8), tb = ascii(type);
+  new DataView(head.buffer).setUint32(0, data.length);
+  head.set(tb, 4);
+  const tail = new Uint8Array(4);
+  new DataView(tail.buffer).setUint32(0, crc32(data, crc32(tb)));
+  return [head, data, tail];
+}
+async function encodePNG16(u16, w, h, onProg) {
+  const cs = new CompressionStream('deflate');
+  const zp = new Response(cs.readable).arrayBuffer();
+  const wr = cs.writable.getWriter();
+  const rowBytes = 1 + w * 6, BLK = 64, n3 = w * 3;
+  for (let y = 0; y < h; y += BLK) {
+    const rows = Math.min(BLK, h - y), blk = new Uint8Array(rows * rowBytes);
+    for (let r = 0; r < rows; r++) {
+      const yy = y + r, s0 = yy * n3, p0 = s0 - n3;
+      let o = r * rowBytes;
+      blk[o++] = 2; // Up 필터
+      if (yy === 0) for (let j = 0; j < n3; j++) { const v = u16[s0 + j]; blk[o++] = v >> 8; blk[o++] = v & 255; }
+      else for (let j = 0; j < n3; j++) {
+        const v = u16[s0 + j], pv = u16[p0 + j];
+        blk[o++] = ((v >> 8) - (pv >> 8)) & 255;
+        blk[o++] = ((v & 255) - (pv & 255)) & 255;
+      }
+    }
+    await wr.write(blk);
+    if (onProg && (y / BLK) % 8 === 0) onProg(y / h);
+  }
+  await wr.close();
+  const z = new Uint8Array(await zp);
+  const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer);
+  dv.setUint32(0, w); dv.setUint32(4, h); ihdr[8] = 16; ihdr[9] = 2; // 16비트 RGB
+  return new Blob([
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    ...pngChunk('IHDR', ihdr),
+    ...pngChunk('sRGB', new Uint8Array([0])),
+    ...pngChunk('IDAT', z),
+    ...pngChunk('IEND', new Uint8Array(0)),
+  ], { type: 'image/png' });
+}
+class ZipWriter {
+  constructor() { this.parts = []; this.cd = []; this.off = 0; this.count = 0; }
+  add(name, data) {
+    const nb = new TextEncoder().encode(name), crc = crc32(data), d = new Date();
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    const lh = new Uint8Array(30 + nb.length), l = new DataView(lh.buffer);
+    l.setUint32(0, 0x04034b50, true); l.setUint16(4, 20, true); l.setUint16(6, 0x0800, true); l.setUint16(8, 0, true);
+    l.setUint16(10, time, true); l.setUint16(12, date, true); l.setUint32(14, crc, true);
+    l.setUint32(18, data.length, true); l.setUint32(22, data.length, true); l.setUint16(26, nb.length, true); l.setUint16(28, 0, true);
+    lh.set(nb, 30);
+    const ch = new Uint8Array(46 + nb.length), c = new DataView(ch.buffer);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+    c.setUint16(12, time, true); c.setUint16(14, date, true); c.setUint32(16, crc, true);
+    c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, nb.length, true);
+    c.setUint32(42, this.off, true); ch.set(nb, 46);
+    this.parts.push(lh, new Blob([data])); this.cd.push(ch);
+    this.off += lh.length + data.length; this.count++;
+  }
+  get size() { return this.off; }
+  finish() {
+    const cdSize = this.cd.reduce((a, b) => a + b.length, 0);
+    const e = new Uint8Array(22), v = new DataView(e.buffer);
+    v.setUint32(0, 0x06054b50, true); v.setUint16(8, this.count, true); v.setUint16(10, this.count, true);
+    v.setUint32(12, cdSize, true); v.setUint32(16, this.off, true);
+    return new Blob([...this.parts, ...this.cd, e], { type: 'application/zip' });
+  }
+}
+
+// ───────── 저장 ─────────
+// Claude 뷰어 안: downloads 기능으로 저장 확인 창을 띄움 (use()는 권한을 묻지 않고, 첫 save에서 물음)
+// 그 밖(로컬 파일로 열었을 때): 일반 다운로드 링크
+const inViewer = !!(window.claude && typeof window.claude.use === 'function');
+const dlReady = inViewer ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+let saveOff = false;   // 이 보기에서 저장을 쓸 수 없음
+function disableSaving() {
+  saveOff = true;
+  ['#btnExport', '#btnExportAll', '#fmt', '#jq'].forEach(q => { const el = $(q); el.disabled = true; el.title = '이 보기에서는 파일을 저장할 수 없습니다'; });
+}
+dlReady.then(dl => { if (inViewer && !dl) disableSaving(); });
+async function saveFile(name, blob) {
+  if (inViewer) {
+    const dl = await dlReady;
+    if (!dl) { disableSaving(); toast('이 보기에서는 파일을 저장할 수 없습니다.'); return false; }
+    try { await dl.save({ filename: name, data: blob }); toast(`저장했습니다: ${name}`); return true; }
+    catch (e) {
+      const code = e && e.code;
+      if (code === 'declined') toast('저장을 취소했습니다.');
+      else if (code === 'too_large') toast('파일이 너무 커서 이 기기에 저장할 수 없습니다. JPEG로 내보내거나 프레임을 하나씩 내보내 보세요.');
+      else if (code === 'rate_limited') toast('다른 저장 확인 창이 열려 있습니다. 잠시 후 다시 시도하세요.');
+      else if (code === 'rejected_extension' || code === 'extension_not_enabled') toast(`.${name.split('.').pop()} 형식은 여기서 저장할 수 없습니다.`);
+      else if (code === 'bad_request' || code === 'transform_error') toast('저장 요청이 올바르지 않습니다.');
+      else { disableSaving(); toast('이 보기에서는 파일을 저장할 수 없습니다.'); }
+      return false;
+    }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast(`저장했습니다: ${name}`);
+  return true;
+}
+
+// ───────── 상태 ─────────
+const DEF = {
+  input: 'srgb', baseCode: null, blackMode: 'pct', channelMode: 'per',
+  clipBlack: 0.1, clipWhite: 0.1, margin: 3,
+  exposure: 0, contrast: 1, black: 0, white: 0,
+  temp: 0, tint: 0, sat: 1,
+  sharpAmt: 0.5, sharpRad: 1.0, sharpThr: 0.01,
+  rot: 0, flip: false, crop: null,
+  aiOff: false,   // Ai+가 켜져 있어도 이 프레임만 기존 방식으로
+};
+const GEOM = ['rot', 'flip', 'crop'];
+const frames = [];
+let cur = null;        // 지금 연 프레임의 작업 상태 { idx, fr, full, prev, baseAuto, hist, an, pipe, outImg, negImg, info }
+let tool = 'none';     // 지금 켜진 도구: none | crop | base | gray
+let negHeld = false, loupeOn = false, loupePt = null, busy = false, drag = null;
+const S = () => cur.fr.s;
+
+// ───────── Ai+ 켜고 끄기 ─────────
+// 전체에 걸리는 스위치 + 프레임별 예외(aiOff). 기본은 꺼짐(기존 방식)
+let aiOn = false, aiTipShown = false;
+const aiEff = fr => aiOn && !fr.s.aiOff;
+function syncAi() {
+  const eff = cur ? aiEff(cur.fr) : aiOn;
+  $('#aiState').textContent = !aiOn ? '꺼짐 · 기존 방식' : eff ? '켜짐' : '이 프레임은 기존 방식';
+  $('#aiInfo').hidden = !aiOn;
+  $('#aiSkip').disabled = !cur;
+  $('#aiSkip').checked = !!(cur && S().aiOff);
+  let lab = '';
+  if (cur && eff) {
+    if (!cur.ai) lab = '분석할 수 있는 화상 영역이 너무 작습니다. 기존 방식으로 변환했습니다.';
+    else {
+      const l = cur.ai.labels.slice(), gr = cur.ai.grain;
+      if (gr && (gr.c > AI.nrMinC || gr.y > AI.nrMinY)) l.push('그레인 줄임');
+      lab = '보정 · ' + (l.length ? l.join(' · ') : '거의 그대로 (이미 알맞음)');
+    }
+  }
+  $('#aiScene').textContent = lab;
+  $('#aiScene').title = lab.includes('화밸 보정(') ? '괄호 안 값은 가운데 밝기에서 뺀 색 틀어짐을 색온도·색조 슬라이더 단위로 환산한 양입니다. 되돌리려면 슬라이더를 반대 방향으로 그만큼 움직이세요.' : '';
+  $('#aiNote').hidden = !(cur && cur.ai);
+  const aiNow = !!(cur && cur.ai);
+  $('#selBlack').disabled = $('#selChan').disabled = !cur || aiNow;
+  $('#selBlack').title = $('#selChan').title = aiNow ? 'Ai+가 켜져 있어 자동으로 정합니다' : '';
+  // 블랙 포인트는 Ai+에서 그림자 깊이를 바꾸는 슬라이더로 동작함
+  if (sliders.black) sliders.black.inp.closest('.ctl').title = aiNow ? '그림자 깊이: +는 더 깊게, −는 들어 올림 (중간 밝기와 흰색은 그대로)' : SL.black.tip;
+}
+$('#aiOn').addEventListener('change', e => {
+  aiOn = e.target.checked;
+  // 터치 기기는 툴팁을 볼 수 없으니 처음 켤 때 한 번 알림으로 보여 줌
+  if (aiOn && !aiTipShown) { aiTipShown = true; if (matchMedia('(hover: none)').matches) toast(AI_TIP.trim()); }
+  if (cur) { updatePct(); render(); }
+  syncAi();
+});
+$('#aiSkip').addEventListener('change', e => {
+  if (!cur) return;
+  S().aiOff = e.target.checked;
+  updatePct(); render(); syncAi();
+});
+
+// ───────── 슬라이더 정의 ─────────
+const pctFmt = v => sgn(v * 100, 1) + '%';
+const SL = {
+  exposure: { label: '노출', min: -3, max: 3, step: 0.01, fmt: v => sgn(v, 2) + ' EV', tip: '가상 인화 노출. 1 EV = 장면 노출 1스톱' },
+  contrast: { label: '대비', min: 0.5, max: 2, step: 0.01, fmt: v => v.toFixed(2) + '×', tip: '인화지 특성곡선의 기울기 (인화지 호수)' },
+  black: { label: '블랙 포인트', min: -0.2, max: 0.3, step: 0.005, fmt: pctFmt, tip: '검은점 위치 (정규화 로그 노출 범위 대비)' },
+  white: { label: '화이트 포인트', min: -0.3, max: 0.2, step: 0.005, fmt: pctFmt, tip: '흰점 위치 (정규화 로그 노출 범위 대비)' },
+  temp: { label: '색온도', min: -2, max: 2, step: 0.01, fmt: v => sgn(v, 2), tip: '− 파랑 / + 호박색. 단위는 채널별 인화 노출 스톱' },
+  tint: { label: '색조', min: -2, max: 2, step: 0.01, fmt: v => sgn(v, 2), tip: '− 녹색 / + 마젠타. 단위는 채널별 인화 노출 스톱' },
+  sat: { label: '채도', min: 0, max: 2, step: 0.01, fmt: v => Math.round(v * 100) + '%', tip: '선형 휘도를 보존하는 채도' },
+  sharpAmt: { label: '양', min: 0, max: 3, step: 0.01, fmt: v => Math.round(v * 100) + '%', sharp: true },
+  sharpRad: { label: '반경', min: 0.4, max: 4, step: 0.05, fmt: v => v.toFixed(2) + ' px', sharp: true, tip: '원본 해상도 기준 가우시안 σ' },
+  sharpThr: { label: '노이즈 임계값', min: 0, max: 0.05, step: 0.001, fmt: v => (v * 100).toFixed(1) + '%', sharp: true },
+  clipBlack: { label: '그림자 클리핑', min: 0, max: 2, step: 0.01, fmt: v => v.toFixed(2) + '%', an: 'pct', tip: '검게 떨어뜨릴 가장 얇은 픽셀 비율' },
+  clipWhite: { label: '하이라이트 클리핑', min: 0, max: 2, step: 0.01, fmt: v => v.toFixed(2) + '%', an: 'pct', tip: '하얗게 날릴 가장 짙은 픽셀 비율' },
+  margin: { label: '분석 제외 테두리', min: 0, max: 20, step: 0.5, fmt: v => v.toFixed(1) + '%', an: 'hist' },
+};
+const sliders = {};
+for (const el of $$('.ctl[data-s]')) {
+  const key = el.dataset.s, def = SL[key];
+  el.innerHTML = `<label for="s-${key}" title="더블클릭하면 기본값">${def.label}</label><output id="o-${key}" for="s-${key}"></output>
+    <input type="range" id="s-${key}" min="${def.min}" max="${def.max}" step="${def.step}" value="${DEF[key]}" disabled>`;
+  if (def.tip) el.title = def.tip;
+  const inp = el.querySelector('input'), out = el.querySelector('output');
+  out.textContent = def.fmt(DEF[key]);
+  const apply = v => {
+    if (!cur) return;
+    S()[key] = v; out.textContent = def.fmt(v);
+    if (def.an === 'hist') reanalyze(); else if (def.an === 'pct') updatePct();
+    if (def.sharp && !loupeOn) setLoupe(true);
+    scheduleRender();
+  };
+  inp.addEventListener('input', () => apply(parseFloat(inp.value)));
+  el.querySelector('label').addEventListener('dblclick', () => { inp.value = DEF[key]; apply(DEF[key]); });
+  sliders[key] = { inp, out, def };
+}
+
+// ───────── 화면 요소 ─────────
+const view = $('#view'), vctx = view.getContext('2d');
+const viewer = $('#viewer');
+const loupeCv = $('#loupeCv'), lctx = loupeCv.getContext('2d');
+const histCv = $('#hist'), hctx = histCv.getContext('2d');
+
+let toastT = 0;
+function toast(msg, action) {
+  const t = $('#toast'); t.textContent = msg;
+  t.classList.toggle('act', !!action);
+  if (action) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = action.label;
+    b.addEventListener('click', () => { t.classList.remove('on'); action.run(); }, { once: true });
+    t.append(b);
+  }
+  t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), action ? 6000 : 3200);
+}
+function showBusy(title, detail) {
+  busy = true; $('#busy').hidden = false; $('#busyT').textContent = title; $('#busyD').textContent = detail || ''; $('#busyF').style.width = '0';
+}
+const setProg = f => { $('#busyF').style.width = (clamp(f, 0, 1) * 100).toFixed(1) + '%'; };
+function hideBusy() { busy = false; $('#busy').hidden = true; $('#busyCancel').hidden = true; }
+
+// ───────── 프레임 관리 ─────────
+// 같은 파일(이름·크기·수정 시각)을 다시 넣으면 건너뜀. macOS가 다른 디스크에 남기는 '._' 파일은 화상이 아니므로 뺌
+const fileKey = f => `${f.name}|${f.size}|${f.lastModified}`;
+function addFiles(list) {
+  const files = Array.from(list).filter(f => !f.name.startsWith('._') && (/\.(tiff?|jpe?g|png|webp|bmp|avif|heic)$/i.test(f.name) || f.type.startsWith('image/')));
+  if (!files.length) { toast('이미지 파일이 아닙니다.'); return; }
+  const have = new Set(frames.map(f => fileKey(f.file)));
+  const fresh = files.filter(f => { const k = fileKey(f); if (have.has(k)) return false; have.add(k); return true; });
+  if (!fresh.length) { toast('이미 불러온 파일입니다.'); return; }
+  fresh.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const first = frames.length;
+  for (const f of fresh) frames.push({ file: f, name: f.name, s: { ...DEF }, thumb: null });
+  updateStrip();
+  if (!saveOff) { $('#fmt').disabled = false; $('#jq').disabled = false; $('#btnExportAll').disabled = false; }
+  $('#btnSync').disabled = !cur || frames.length < 2;
+  if (files.length > fresh.length) toast(`이미 있는 파일 ${files.length - fresh.length}개는 건너뛰었습니다.`);
+  if (!cur) openFrame(first);
+  queueThumbs();
+}
+// 필름 띠: 프레임마다 요소를 한 번 만들고 바뀐 부분만 고침 (썸네일이 채워질 때 키보드 포커스·스크롤이 유지되게)
+function updateStrip() {
+  const ol = $('#frames');
+  if (!frames.length) { ol.innerHTML = '<li class="none">불러온 프레임이 여기 필름처럼 쌓입니다.</li>'; return; }
+  const none = ol.querySelector('.none');
+  if (none) none.remove();
+  frames.forEach((fr, i) => {
+    if (!fr.li) {
+      const li = document.createElement('li'), b = document.createElement('button'), x = document.createElement('button');
+      b.className = 'frame'; b.type = 'button'; b.title = fr.name;
+      b.innerHTML = '<span class="edge"></span><span class="pic"></span><span class="fname"></span>';
+      b.querySelector('.fname').textContent = fr.name;
+      b.addEventListener('click', () => { const k = frames.indexOf(fr); if (!busy && k >= 0 && (!cur || cur.fr !== fr)) openFrame(k); });
+      x.className = 'fdel'; x.type = 'button'; x.textContent = '×';
+      x.title = '이 프레임을 목록에서 빼기 (전체 ZIP에서도 빠짐)'; x.setAttribute('aria-label', `${fr.name} 목록에서 빼기`);
+      x.addEventListener('click', e => { e.stopPropagation(); removeFrame(fr); });
+      li.append(b, x); fr.li = li; fr.picState = null;
+    }
+    const b = fr.li.firstChild, pic = b.querySelector('.pic');
+    b.setAttribute('aria-current', cur && cur.fr === fr ? 'true' : 'false');
+    b.querySelector('.edge').textContent = `▸ ${i + 1}`;
+    const want = fr.thumb || (fr.thumbFail ? '!' + (fr.thumbErr || '') : '…');
+    if (fr.picState !== want) {
+      fr.picState = want;
+      if (fr.thumb) { pic.innerHTML = '<img alt="">'; pic.firstChild.src = fr.thumb; pic.title = ''; }
+      else {
+        pic.innerHTML = '<span></span>';
+        pic.firstChild.textContent = fr.thumbFail ? '읽을 수 없음' : '변환 중…';
+        pic.title = fr.thumbFail ? (fr.thumbErr || '이 파일을 읽을 수 없습니다') : '';
+      }
+    }
+    if (ol.children[i] !== fr.li) ol.insertBefore(fr.li, ol.children[i] || null);
+  });
+  while (ol.children.length > frames.length) ol.lastChild.remove();   // 뺀 프레임의 요소는 뒤로 밀려나 있음
+}
+// 연 프레임을 닫고 빈 화면으로
+function clearCurrent() {
+  cur = null;
+  enableUI(false); setLoupe(false); drawHist(); syncAi();
+  $('#stInfo').textContent = '파일 없음';
+  $('#dens').hidden = true;
+}
+// 프레임을 목록에서 빼기. 설정까지 통째로 들고 있다가 알림의 '되돌리기'로 제자리에 되돌림
+function removeFrame(fr) {
+  if (busy) return;
+  const i = frames.indexOf(fr);
+  if (i < 0) return;
+  frames.splice(i, 1);
+  const wasCur = cur && cur.fr === fr;
+  if (wasCur) clearCurrent();
+  else if (cur) cur.idx = frames.indexOf(cur.fr);
+  updateStrip();
+  $('#btnSync').disabled = !cur || frames.length < 2;
+  if (!frames.length) ['#fmt', '#jq', '#btnExportAll'].forEach(q => { $(q).disabled = true; });
+  if (wasCur && frames.length) openFrame(Math.min(i, frames.length - 1));
+  toast(`목록에서 뺐습니다: ${fr.name}`, { label: '되돌리기', run: () => {
+    if (frames.includes(fr)) return;
+    frames.splice(Math.min(i, frames.length), 0, fr);
+    if (cur) cur.idx = frames.indexOf(cur.fr);
+    updateStrip();
+    if (!saveOff) { $('#fmt').disabled = false; $('#jq').disabled = false; $('#btnExportAll').disabled = false; }
+    $('#btnSync').disabled = !cur || frames.length < 2;
+    if (!cur && !busy) openFrame(frames.indexOf(fr));
+    queueThumbs();
+  } });
+}
+async function openFrame(i) {
+  if (busy) return;
+  const fr = frames[i];
+  setTool('none');
+  showBusy('불러오는 중', fr.name);
+  await nextFrame();
+  const prevCur = cur;
+  try {
+    cur = null;
+    const img = await loadImageFile(fr.file, setProg);
+    const full = orient(img, fr.s);
+    const prev = downscale(full, PREVIEW_LONG);
+    cur = { idx: i, fr, full, prev, info: { bits: img.bits, kind: img.kind, w0: img.w, h0: img.h } };
+    cur.baseAuto = autoBase(prev);
+    cur.negImg = makeNegImage(prev);
+    reanalyze();
+    loupePt = { x: full.w / 2, y: full.h / 2 };
+    enableUI(true);
+    syncUI();
+    render();
+    updateStrip();
+  } catch (e) {
+    console.error(e);
+    cur = prevCur;
+    toast(friendlyError(e));
+    if (!cur) { $('#empty').hidden = false; view.hidden = true; }
+  } finally { hideBusy(); }
+}
+function makeNegImage(P) {
+  const img = new ImageData(P.w, P.h), o = img.data, d = P.d;
+  for (let i = 0, j = 0; i < d.length; i += 3, j += 4) { o[j] = d[i] >> 8; o[j + 1] = d[i + 1] >> 8; o[j + 2] = d[i + 2] >> 8; o[j + 3] = 255; }
+  return img;
+}
+function reanalyze() {
+  if (!cur) return;
+  const s = S(), key = s.input + '|' + (s.baseCode || cur.baseAuto).map(Math.round).join(',');
+  if (cur.areaKey !== key) { cur.area = filmArea(cur.prev, s, cur.baseAuto); cur.areaKey = key; }
+  cur.hist = analyzeHist(cur.prev, s, cur.area);
+  updatePct();
+}
+function updatePct() {
+  if (!cur) return;
+  const s = S();
+  cur.an = { ...percentiles(cur.hist, s.clipBlack, s.clipWhite), baseAuto: cur.baseAuto };
+  cur.ai = aiEff(cur.fr) ? aiAnalyze(cur.prev, s, cur.an, cur.area, cur) : null;
+}
+
+// ───────── UI 동기화 ─────────
+function enableUI(on) {
+  for (const k in sliders) sliders[k].inp.disabled = !on;
+  $$('[data-act]').forEach(b => { b.disabled = !on; });
+  ['#selInput', '#selBlack', '#selChan', '#btnBaseAuto', '#btnReset', '#btnSync', '#btnExport', '#fmt', '#jq'].forEach(s => { $(s).disabled = !on; });
+  $('#btnSync').disabled = !on || frames.length < 2;
+  if (saveOff) disableSaving();
+  $('#empty').hidden = on; view.hidden = !on;
+}
+function syncUI() {
+  const s = S();
+  for (const k in sliders) { sliders[k].inp.value = s[k]; sliders[k].out.textContent = sliders[k].def.fmt(s[k]); }
+  $('#selInput').value = s.input; $('#selBlack').value = s.blackMode; $('#selChan').value = s.channelMode;
+  const f = cur.full, info = cur.info;
+  $('#stInfo').textContent = `${cur.fr.name} — ${f.w} × ${f.h} px, ${info.bits}비트 ${info.kind}`;
+}
+function updateReadouts() {
+  const s = S(), pp = cur.pipe, b = pp.base;
+  const css = `rgb(${b.map(v => Math.round(v / 257)).join(',')})`;
+  $('#baseSw').style.background = css;
+  document.documentElement.style.setProperty('--base-chip', css);
+  $('#baseVal').textContent = b.map(v => (v / 65535).toFixed(3)).join(' / ');
+  $('#baseSrc').textContent = s.baseCode ? '직접 지정 (R / G / B)' : '자동 감지 (R / G / B)';
+  $('#dens').hidden = false;
+  $('#densRGB').textContent = pp.rng.map(v => v.toFixed(2)).join(' / ') + ' D';
+  $('#densStops').textContent = `약 ${pp.S.toFixed(1)} 스톱 (필름 감마 ${FILM_GAMMA} 가정)`;
+  const ex = cur.hist.excluded, showEx = ex >= 0.005;
+  $('#exclL').hidden = $('#excl').hidden = !showEx;
+  if (showEx) $('#excl').textContent = `${(ex * 100).toFixed(1)}% (홀더·클리핑·빛샘)`;
+  $('#baseNote').hidden = !(s.blackMode === 'pct' && s.channelMode === 'per') || pp.mode === 'ai';
+  syncAi();
+}
+
+// ───────── 렌더링 ─────────
+let rq = 0;
+function scheduleRender() { if (!rq) rq = requestAnimationFrame(() => { rq = 0; render(); }); }
+function render() {
+  if (!cur) return;
+  const s = S(), P = cur.prev;
+  cur.pipe = buildPipe(s, cur.an, cur.ai);
+  if (cur.ai && cur.ai.grain === undefined) cur.ai.grain = aiGrain(cur.full, cur.pipe);
+  if (!cur.outImg || cur.outImg.width !== P.w || cur.outImg.height !== P.h) {
+    cur.outImg = new ImageData(P.w, P.h);
+    cur.outImg.data.fill(255);   // 알파는 한 번만 채움
+  }
+  const o = cur.outImg.data, sh = sharpParams(s, P.w / cur.full.w, cur.pipe);
+  if (sh) {
+    const f = processRect(P.d, P.w, P.h, 0, 0, P.w, P.h, cur.pipe, sh);
+    for (let i = 0, j = 0; i < f.length; i += 3, j += 4) { o[j] = f[i] * 255; o[j + 1] = f[i + 1] * 255; o[j + 2] = f[i + 2] * 255; }
+  } else if (cur.pipe.mode === 'ai') aiRect(P.d, P.w, P.h, 0, 0, P.w, P.h, cur.pipe, null, o);
+  else render8(P.d, P.w * P.h, cur.pipe, o);
+  drawView(); drawHist(); renderLoupe(); updateReadouts(); scheduleThumb();
+}
+// 선명도가 없을 때(큰 스캔의 축소 미리보기)의 빠른 경로: 중간 버퍼 없이 바로 8비트로
+function render8(src, n, pp, o) {
+  const L0 = pp.lut[0], L1 = pp.lut[1], L2 = pp.lut[2], sat = pp.sat;
+  for (let i = 0, j = 0, k = 0; i < n; i++, j += 3, k += 4) {
+    let r = L0[src[j]], g = L1[src[j + 1]], b = L2[src[j + 2]];
+    if (sat !== 1) {
+      const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      r = Y + sat * (r - Y); g = Y + sat * (g - Y); b = Y + sat * (b - Y);
+    }
+    r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+    o[k] = ENC8[(r * 65535 + 0.5) | 0]; o[k + 1] = ENC8[(g * 65535 + 0.5) | 0]; o[k + 2] = ENC8[(b * 65535 + 0.5) | 0];
+  }
+}
+function cropPx(P, s) {
+  const c = s.crop;
+  if (!c) return { x: 0, y: 0, w: P.w, h: P.h };
+  const x = clamp(Math.round(c.x * P.w), 0, P.w - 1), y = clamp(Math.round(c.y * P.h), 0, P.h - 1);
+  return { x, y, w: clamp(Math.round(c.w * P.w), 1, P.w - x), h: clamp(Math.round(c.h * P.h), 1, P.h - y) };
+}
+// 베이스 찍기·자르기 중에는 자르기 밖(프레임 사이 필름)까지 전체를 보여 줌
+const fullView = () => tool === 'crop' || tool === 'base';
+function viewRect() { const P = cur.prev; return fullView() ? { x: 0, y: 0, w: P.w, h: P.h } : cropPx(P, S()); }
+function drawView() {
+  if (!cur) return;
+  const r = viewRect(), neg = negHeld || tool === 'base';
+  if (view.width !== r.w || view.height !== r.h) { view.width = r.w; view.height = r.h; fitView(); }
+  vctx.putImageData(neg ? cur.negImg : cur.outImg, -r.x, -r.y, r.x, r.y, r.w, r.h);
+  if (!neg) {
+    // 저장될 영역(자르는 중이면 자르기 사각형)의 왼쪽 아래에 저장 결과와 같은 비율로
+    const c = tool === 'crop' ? cropPx(cur.prev, S()) : { x: r.x, y: r.y, w: r.w, h: r.h };
+    drawWatermark(vctx, c.x - r.x, c.y - r.y, c.w, c.h);
+  }
+  if (tool === 'crop') drawCropOverlay();
+}
+function fitView() {
+  if (!view.width) return;
+  const vw = viewer.clientWidth - 28, vh = viewer.clientHeight - 28;
+  const k = Math.min(vw / view.width, vh / view.height);
+  view.style.width = Math.max(1, Math.floor(view.width * k)) + 'px';
+  view.style.height = Math.max(1, Math.floor(view.height * k)) + 'px';
+}
+new ResizeObserver(() => fitView()).observe(viewer);
+
+function drawCropOverlay() {
+  const P = cur.prev, c = S().crop;
+  if (!c) return;
+  const x = c.x * P.w, y = c.y * P.h, w = c.w * P.w, h = c.h * P.h;
+  const lw = Math.max(1, view.width / (parseFloat(view.style.width) || view.width)) * 1.5;
+  vctx.save();
+  vctx.fillStyle = 'rgba(0,0,0,.58)';
+  vctx.fillRect(0, 0, P.w, y); vctx.fillRect(0, y + h, P.w, P.h - y - h);
+  vctx.fillRect(0, y, x, h); vctx.fillRect(x + w, y, P.w - x - w, h);
+  vctx.strokeStyle = 'rgba(255,255,255,.45)'; vctx.lineWidth = lw * 0.6;
+  vctx.beginPath();
+  for (let k = 1; k < 3; k++) { vctx.moveTo(x + w * k / 3, y); vctx.lineTo(x + w * k / 3, y + h); vctx.moveTo(x, y + h * k / 3); vctx.lineTo(x + w, y + h * k / 3); }
+  vctx.stroke();
+  vctx.strokeStyle = '#fff'; vctx.lineWidth = lw; vctx.strokeRect(x, y, w, h);
+  // 모서리 손잡이
+  const hl = Math.min(w, h, lw * 14) , ht = lw * 2.4;
+  vctx.fillStyle = '#fff';
+  for (const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+    vctx.fillRect(sx > 0 ? cx - ht / 2 : cx - hl, sy > 0 ? cy - ht / 2 : cy - ht / 2, hl + ht / 2, ht);
+    vctx.fillRect(sx > 0 ? cx - ht / 2 : cx - ht / 2, sy > 0 ? cy - ht / 2 : cy - hl, ht, hl + ht / 2);
+  }
+  vctx.restore();
+}
+
+function drawHist() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.round(histCv.clientWidth * dpr), H = Math.round(histCv.clientHeight * dpr);
+  if (histCv.width !== W || histCv.height !== H) { histCv.width = W; histCv.height = H; }
+  hctx.clearRect(0, 0, W, H);
+  if (!cur) return;
+  const P = cur.prev, r = cropPx(P, S()), d = cur.outImg.data;
+  const hs = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+  let n = 0;
+  for (let y = r.y; y < r.y + r.h; y++) {
+    let i = (y * P.w + r.x) * 4;
+    for (let x = 0; x < r.w; x++, i += 4) { hs[0][d[i]]++; hs[1][d[i + 1]]++; hs[2][d[i + 2]]++; n++; }
+  }
+  let m = 1;
+  for (const h of hs) for (let b = 1; b < 255; b++) if (h[b] > m) m = h[b];
+  const cols = ['rgba(255,70,70,.8)', 'rgba(70,235,95,.75)', 'rgba(80,130,255,.85)'];
+  hctx.globalCompositeOperation = 'lighter';
+  hs.forEach((h, c) => {
+    hctx.fillStyle = cols[c]; hctx.beginPath(); hctx.moveTo(0, H);
+    for (let b = 0; b < 256; b++) hctx.lineTo(b / 255 * W, H - Math.min(1, Math.sqrt(h[b] / m)) * (H - 4));
+    hctx.lineTo(W, H); hctx.closePath(); hctx.fill();
+  });
+  hctx.globalCompositeOperation = 'source-over';
+  // 클리핑 표시: 0.2% 넘게 끝에 몰리면 모서리에 흰 삼각형
+  const tri = left => {
+    const s = 7 * dpr; hctx.fillStyle = '#fff'; hctx.beginPath();
+    if (left) { hctx.moveTo(3 * dpr, 3 * dpr); hctx.lineTo(3 * dpr + s, 3 * dpr); hctx.lineTo(3 * dpr, 3 * dpr + s); }
+    else { hctx.moveTo(W - 3 * dpr, 3 * dpr); hctx.lineTo(W - 3 * dpr - s, 3 * dpr); hctx.lineTo(W - 3 * dpr, 3 * dpr + s); }
+    hctx.fill();
+  };
+  if (hs.some(h => h[0] > n * 0.002)) tri(true);
+  if (hs.some(h => h[255] > n * 0.002)) tri(false);
+}
+
+// ───────── 1:1 확대경 ─────────
+function setLoupe(on) {
+  loupeOn = on; $('#loupe').hidden = !on;
+  $$('[data-act="loupe"]').forEach(b => b.setAttribute('aria-pressed', on));
+  if (on) renderLoupe();
+}
+let lq = 0;
+function renderLoupe() {
+  if (!loupeOn || !cur || !loupePt) return;
+  if (lq) return;
+  lq = requestAnimationFrame(() => {
+    lq = 0;
+    const F = cur.full, L = loupeCv.width;
+    const rw = Math.min(L, F.w), rh = Math.min(L, F.h);
+    const x0 = clamp(Math.round(loupePt.x - rw / 2), 0, F.w - rw), y0 = clamp(Math.round(loupePt.y - rh / 2), 0, F.h - rh);
+    const img = lctx.createImageData(rw, rh), o = img.data;
+    if (negHeld) {
+      for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) {
+        const i = ((y0 + y) * F.w + x0 + x) * 3, j = (y * rw + x) * 4;
+        o[j] = F.d[i] >> 8; o[j + 1] = F.d[i + 1] >> 8; o[j + 2] = F.d[i + 2] >> 8; o[j + 3] = 255;
+      }
+    } else {
+      const f = processRect(F.d, F.w, F.h, x0, y0, rw, rh, cur.pipe, sharpParams(S(), 1, cur.pipe));
+      for (let i = 0, j = 0; i < f.length; i += 3, j += 4) { o[j] = f[i] * 255; o[j + 1] = f[i + 1] * 255; o[j + 2] = f[i + 2] * 255; o[j + 3] = 255; }
+    }
+    lctx.fillStyle = '#000'; lctx.fillRect(0, 0, L, L);
+    lctx.putImageData(img, (L - rw) >> 1, (L - rh) >> 1);
+  });
+}
+
+// ───────── 썸네일 ─────────
+// 썸네일이 어떤 설정으로 만들어졌는지 나타내는 열쇠. 설정·Ai+ 켜짐이 바뀌면 다시 만듦
+const thumbKey = fr => JSON.stringify(fr.s) + '|' + aiEff(fr);
+// 잘라 낸 영역을 긴 변 160px로 줄여 JPEG 데이터 URL로
+function thumbURL(img, P, s) {
+  const r = cropPx(P, s), k = 160 / Math.max(r.w, r.h);
+  const a = document.createElement('canvas'); a.width = r.w; a.height = r.h;
+  a.getContext('2d').putImageData(img, -r.x, -r.y, r.x, r.y, r.w, r.h);
+  const t = document.createElement('canvas'); t.width = Math.max(1, Math.round(r.w * k)); t.height = Math.max(1, Math.round(r.h * k));
+  const tc = t.getContext('2d'); tc.imageSmoothingQuality = 'high'; tc.drawImage(a, 0, 0, t.width, t.height);
+  return t.toDataURL('image/jpeg', 0.82);
+}
+let thumbT = 0;
+function scheduleThumb() {
+  clearTimeout(thumbT);
+  thumbT = setTimeout(() => {
+    if (!cur) return;
+    cur.fr.thumb = thumbURL(cur.outImg, cur.prev, S()); cur.fr.thumbKey = thumbKey(cur.fr); cur.fr.thumbFail = false;
+    updateStrip();
+    queueThumbs();   // 같은 설정 일괄 적용이나 Ai+ 켜고 끄기로 다른 프레임의 썸네일도 낡았을 수 있음
+  }, 700);
+}
+// 사용자가 마지막으로 조작한 시각. 썸네일 작업은 조작이 THUMB_IDLE 동안 멈췄을 때만 진행해
+// 슬라이더·자르기·확대경·돌리기가 끊기지 않게 함 (마우스를 그냥 움직이는 것은 확대경이 켜졌을 때만 조작으로 셈)
+const THUMB_IDLE = 1200;
+let lastInput = 0;
+const markInput = () => { lastInput = performance.now(); };
+['pointerdown', 'wheel', 'keydown', 'input'].forEach(t => addEventListener(t, markInput, { capture: true, passive: true }));
+addEventListener('pointermove', e => { if (e.buttons || loupeOn) markInput(); }, { capture: true, passive: true });
+// 썸네일 작업의 쉼표: 16ms 넘게 달렸으면 이벤트 루프에 양보하고(쌓인 입력·그리기 먼저), 조작 중이면 멈춰 기다림.
+// 그래서 화면을 막는 한 덩어리는 길어야 한 단계 분량. 불러오기·내보내기가 시작되면 THUMB_STOP을 던져 그 장을 버림:
+// 쥐고 있던 원본(큰 스캔이면 140MB 안팎)을 바로 놓아 메모리가 겹치지 않게 하고, 끝난 뒤 처음부터 다시 만듦
+const THUMB_STOP = new Error('썸네일 작업 중단');
+let thumbT0 = 0;
+async function thumbPause() {
+  if (performance.now() - thumbT0 < 16 && !busy && performance.now() - lastInput >= THUMB_IDLE) return;
+  await yieldTask();
+  for (;;) {
+    if (busy) throw THUMB_STOP;
+    if (performance.now() - lastInput >= THUMB_IDLE) break;
+    await new Promise(r => setTimeout(r, 150));
+  }
+  thumbT0 = performance.now();
+}
+// 다음 한 장을 시작하기 전: 화면 작업이 끝나고 조작이 멈출 때까지 기다림 (아무것도 쥐고 있지 않으므로 던지지 않음)
+async function thumbWait() {
+  await yieldTask();
+  while (busy || performance.now() - lastInput < THUMB_IDLE) await new Promise(r => setTimeout(r, 150));
+  thumbT0 = performance.now();
+}
+// 다음에 만들 프레임: 지금 연 프레임 다음부터 돌아가며 (곧 열 프레임이 먼저 채워지게)
+function nextThumbFrame() {
+  const n = frames.length, i0 = cur ? frames.indexOf(cur.fr) : -1;
+  for (let k = 1; k <= n; k++) {
+    const f = frames[(i0 + k + n) % n];
+    if ((!cur || f !== cur.fr) && !f.thumbFail && f.thumbKey !== thumbKey(f)) return f;
+  }
+  return null;
+}
+// 열지 않은 프레임의 썸네일: 한 장씩 원본을 읽어 미리보기 해상도에서 열 때와 같은 분석·변환을 하고 160px로 줄임.
+// 해독·축소·필름 영역·Ai+ 분석·변환을 모두 조각조각 쉬며 돌려 한 번에 화면을 막는 시간이 짧고,
+// 원본 화상은 축소 뒤 바로 놓아 메모리를 아낌
+let thumbRun = false;
+async function queueThumbs() {
+  if (thumbRun) return;
+  thumbRun = true;
+  try {
+    for (;;) {
+      await thumbWait();
+      const fr = nextThumbFrame();
+      if (!fr) break;
+      const key = thumbKey(fr), s = { ...fr.s };
+      try {
+        let img = await loadImageFile(fr.file, null, thumbPause);
+        await thumbPause();
+        // 방향은 줄인 뒤에 맞춤 (원본 해상도 회전을 피함; 160px 썸네일에서는 차이가 보이지 않음)
+        const P = orient(await runAsync(downscaleG(img, PREVIEW_LONG), thumbPause), s);
+        img = null;
+        await thumbPause();
+        const baseAuto = autoBase(P);
+        await thumbPause();
+        const area = await runAsync(filmAreaG(P, s, baseAuto), thumbPause);
+        await thumbPause();
+        const an = { ...percentiles(analyzeHist(P, s, area), s.clipBlack, s.clipWhite), baseAuto };
+        await thumbPause();
+        const ai = aiEff(fr) ? await runAsync(aiAnalyzeG(P, s, an, area, {}), thumbPause) : null;
+        if (ai) ai.grain = { y: 0, c: 0 };
+        await thumbPause();
+        // 열었을 때와 같은 미리보기 해상도에서 128행씩 변환 (띠 사이에 쉼)
+        const pp = buildPipe(s, an, ai), out = new ImageData(P.w, P.h), o = out.data;
+        for (let y = 0; y < P.h; y += 128) {
+          const rh = Math.min(128, P.h - y);
+          if (pp.mode === 'ai') aiRect(P.d, P.w, P.h, 0, y, P.w, rh, pp, null, o.subarray(y * P.w * 4, (y + rh) * P.w * 4));
+          else render8(P.d.subarray(y * P.w * 3), P.w * rh, pp, o.subarray(y * P.w * 4));
+          await thumbPause();
+        }
+        for (let j = 3; j < o.length; j += 4) o[j] = 255;
+        // 도는 동안 설정이 바뀌었거나(다시 만들 것) 그 프레임이 열렸으면(화면 결과가 씀) 버림
+        if (thumbKey(fr) === key && (!cur || cur.fr !== fr)) { fr.thumb = thumbURL(out, P, s); fr.thumbKey = key; fr.thumbFail = false; }
+      } catch (e) {
+        if (e === THUMB_STOP) continue;   // 화면 작업에 자리를 내줌. 이 장은 낡은 채로 남아 다음 차례에 다시 만듦
+        console.error(e);
+        if (thumbKey(fr) === key) { fr.thumbFail = true; fr.thumbErr = friendlyError(e); fr.thumbKey = key; }
+      }
+      if (frames.includes(fr)) updateStrip();
+    }
+  } finally { thumbRun = false; }
+}
+
+// ───────── 도구 ─────────
+const TOUCH = matchMedia('(hover: none)').matches;
+const HINTS = {
+  none: TOUCH ? '원본 보기 버튼을 누르고 있으면 네거티브가 보입니다' : 'N 키: 원본 보기, Esc: 도구 해제',
+  crop: '바깥에서 드래그해 새로 그리고, 변·모서리로 크기를, 안쪽을 끌어 위치를 바꿉니다. Enter로 완료',
+  base: '프레임 사이의 노출되지 않은 주황색 필름을 클릭하세요',
+  gray: '무채색이어야 할 곳(회색 벽, 흰 종이, 아스팔트)을 클릭하세요',
+};
+function setTool(t) {
+  const was = tool;
+  tool = was === t ? 'none' : t;
+  $$('[data-act="crop"],[data-act="base"],[data-act="gray"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.act === tool));
+  const cropping = tool === 'crop';
+  $('#ratio').hidden = !cropping;
+  $('[data-act="cropClear"]').hidden = !cropping;
+  $('[data-act="cropAuto"]').hidden = !cropping;
+  $('[data-act="cropDone"]').hidden = !cropping;
+  view.className = tool === 'base' || tool === 'gray' ? 'pick' : cropping ? 'crop' : '';
+  viewer.classList.toggle('cropping', cropping);
+  view.style.cursor = '';
+  $('#stHint').textContent = HINTS[tool];
+  if (!cur) return;
+  if (was === 'crop' && tool !== 'crop') { reanalyze(); render(); fitView(); }
+  else drawView();
+}
+function samplePrev(p, rad) {
+  const P = cur.prev, cx = clamp(Math.round(p.x), 0, P.w - 1), cy = clamp(Math.round(p.y), 0, P.h - 1), pts = [];
+  for (let y = Math.max(0, cy - rad); y <= Math.min(P.h - 1, cy + rad); y++)
+    for (let x = Math.max(0, cx - rad); x <= Math.min(P.w - 1, cx + rad); x++) pts.push((y * P.w + x) * 3);
+  return pts;
+}
+function pickBase(p) {
+  const d = cur.prev.d, pts = samplePrev(p, 3), sum = [0, 0, 0];
+  for (const i of pts) { sum[0] += d[i]; sum[1] += d[i + 1]; sum[2] += d[i + 2]; }
+  const s = S();
+  s.baseCode = sum.map(v => v / pts.length);
+  const switched = s.blackMode !== 'base';
+  s.blackMode = 'base';
+  setTool('none'); reanalyze(); syncUI(); render();
+  toast(!switched ? '필름 베이스를 지정했습니다.'
+    : cur.ai ? '필름 베이스를 지정했습니다. 검은점 기준도 필름 베이스로 바꿨지만, Ai+가 켜져 있는 동안은 자동 기준을 쓰고 Ai+를 끄면 적용됩니다.'
+    : '필름 베이스를 지정했습니다. 검은점 기준을 필름 베이스로 바꿨습니다.');
+}
+function pickGray(p) {
+  const d = cur.prev.d, pp = cur.pipe, pts = samplePrev(p, 2), xs = [0, 0, 0];
+  let k = 0;
+  for (const i of pts) {
+    const v0 = pp.pre(0, d[i]), v1 = pp.pre(1, d[i + 1]), v2 = pp.pre(2, d[i + 2]);
+    if (!isFinite(v0) || !isFinite(v1) || !isFinite(v2)) continue;   // 필름 문턱 아래(완전한 검정)는 색을 잴 수 없음
+    xs[0] += v0; xs[1] += v1; xs[2] += v2; k++;
+  }
+  if (!k) { toast('너무 어두운 곳이라 색을 잴 수 없습니다. 조금 더 밝은 무채색을 찍어 주세요.'); return; }
+  for (let c = 0; c < 3; c++) xs[c] /= k;
+  const m = (xs[0] + xs[1] + xs[2]) / 3;
+  const o = xs.map(x => m - x); // 채널별 필요한 보정(스톱)
+  const s = S();
+  s.temp = clamp((o[0] - o[2]) / 2, -2, 2);
+  s.tint = clamp((0.5 * o[0] - o[1] + 0.5 * o[2]) / 1.5, -2, 2);
+  setTool('none'); syncUI(); render();
+  toast('찍은 지점을 무채색으로 맞췄습니다.');
+}
+
+// 포인터 → 미리보기 좌표
+function evToPrev(e) {
+  const b = view.getBoundingClientRect(), r = viewRect();
+  return { x: r.x + (e.clientX - b.left) / b.width * r.w, y: r.y + (e.clientY - b.top) / b.height * r.h };
+}
+function setLoupeFromPrev(p) {
+  const P = cur.prev, F = cur.full;
+  loupePt = { x: p.x * F.w / P.w, y: p.y * F.h / P.h };
+  renderLoupe();
+}
+// 자르기 상자 잡기 판정: 모서리('nw' 등), 변('n' 등), 안쪽('move'), 바깥(null). 허용 거리는 화면 기준 10px
+const CURSORS = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
+function cropHit(p) {
+  const c = S().crop;
+  if (!c) return null;
+  const P = cur.prev, b = view.getBoundingClientRect(), tol = 10 * P.w / Math.max(1, b.width);
+  const x0 = c.x * P.w, y0 = c.y * P.h, x1 = (c.x + c.w) * P.w, y1 = (c.y + c.h) * P.h;
+  const inX = p.x > x0 - tol && p.x < x1 + tol, inY = p.y > y0 - tol && p.y < y1 + tol;
+  if (!inX || !inY) return null;
+  const v = Math.abs(p.y - y0) < tol ? 'n' : Math.abs(p.y - y1) < tol ? 's' : '';
+  const h = Math.abs(p.x - x0) < tol ? 'w' : Math.abs(p.x - x1) < tol ? 'e' : '';
+  return v + h || 'move';
+}
+const cropRatio = () => { const v = $('#ratio').value; return v === 'free' ? 0 : parseFloat(v); };
+// 자동 맞춤: 홀더(비필름)와 베이스 같은 줄을 모두 걷어낸 상자. 비율이 정해져 있으면 그 안에 가운데 맞춤
+function autoCrop() {
+  const P = cur.prev;
+  const b = findBorder(cur.area.M, P.w, P.h, v => v !== 0, [0.6, 0.3]);
+  let x = b.x0, y = b.y0, w = b.x1 - b.x0, h = b.y1 - b.y0;
+  if (w === P.w && h === P.h) { toast('테두리를 찾지 못했습니다. 직접 드래그해 지정하세요.'); return; }
+  const R = cropRatio();
+  if (R) {
+    const rw = w >= h ? R : 1 / R;
+    const nw = Math.min(w, h * rw), nh = nw / rw;
+    x += (w - nw) / 2; y += (h - nh) / 2; w = nw; h = nh;
+  }
+  S().crop = { x: x / P.w, y: y / P.h, w: w / P.w, h: h / P.h };
+  drawView();
+}
+
+view.addEventListener('pointerdown', e => {
+  if (!cur || busy) return;
+  const p = evToPrev(e), P = cur.prev;
+  if (tool === 'crop') {
+    const c = S().crop, hit = cropHit(p);
+    if (hit === 'move') drag = { mode: 'move', px: p.x, py: p.y, c0: { ...c } };
+    else if (hit) {
+      // 모서리는 맞은편 모서리를 고정점으로 새로 그리는 것과 같음, 변은 맞은편 변을 고정
+      const x0 = c.x * P.w, y0 = c.y * P.h, x1 = (c.x + c.w) * P.w, y1 = (c.y + c.h) * P.h;
+      if (hit.length === 2) drag = { mode: 'new', ax: hit.includes('w') ? x1 : x0, ay: hit.includes('n') ? y1 : y0, c0: { ...c } };
+      else drag = { mode: 'edge', edge: hit, x0, y0, x1, y1, c0: { ...c } };
+    } else drag = { mode: 'new', ax: clamp(p.x, 0, P.w), ay: clamp(p.y, 0, P.h), c0: c };
+    view.setPointerCapture(e.pointerId); e.preventDefault();
+    return;
+  }
+  if (tool === 'base') { pickBase(p); return; }
+  if (tool === 'gray') { pickGray(p); return; }
+  if (loupeOn) setLoupeFromPrev(p);
+});
+view.addEventListener('pointermove', e => {
+  if (!cur) return;
+  const p = evToPrev(e), P = cur.prev, s = S();
+  if (drag) {
+    if (drag.mode === 'move') {
+      const c = drag.c0;
+      s.crop = { ...c, x: clamp(c.x + (p.x - drag.px) / P.w, 0, 1 - c.w), y: clamp(c.y + (p.y - drag.py) / P.h, 0, 1 - c.h) };
+    } else if (drag.mode === 'edge') {
+      let { x0, y0, x1, y1 } = drag;
+      const MIN = 8, R = cropRatio(), ed = drag.edge;
+      if (ed === 'w') x0 = clamp(p.x, 0, x1 - MIN); else if (ed === 'e') x1 = clamp(p.x, x0 + MIN, P.w);
+      else if (ed === 'n') y0 = clamp(p.y, 0, y1 - MIN); else y1 = clamp(p.y, y0 + MIN, P.h);
+      if (R) {
+        // 비율 고정: 반대 축을 가운데 기준으로 맞춰 늘이고, 화면 밖으로 나가면 전체를 줄임
+        const rw = drag.c0.w * P.w >= drag.c0.h * P.h ? R : 1 / R;
+        if (ed === 'w' || ed === 'e') {
+          const cy = (drag.y0 + drag.y1) / 2, half = Math.min((x1 - x0) / rw, 2 * cy, 2 * (P.h - cy)) / 2;
+          y0 = cy - half; y1 = cy + half;
+          const nw = (y1 - y0) * rw; if (ed === 'w') x0 = x1 - nw; else x1 = x0 + nw;
+        } else {
+          const cx = (drag.x0 + drag.x1) / 2, half = Math.min((y1 - y0) * rw, 2 * cx, 2 * (P.w - cx)) / 2;
+          x0 = cx - half; x1 = cx + half;
+          const nh = (x1 - x0) / rw; if (ed === 'n') y0 = y1 - nh; else y1 = y0 + nh;
+        }
+      }
+      s.crop = { x: x0 / P.w, y: y0 / P.h, w: (x1 - x0) / P.w, h: (y1 - y0) / P.h };
+    } else {
+      const ex = clamp(p.x, 0, P.w), ey = clamp(p.y, 0, P.h), dx = ex - drag.ax, dy = ey - drag.ay;
+      let w = Math.abs(dx), h = Math.abs(dy);
+      const R = cropRatio();
+      if (R) {
+        const rw = w >= h ? R : 1 / R; // 드래그 모양으로 가로·세로 결정
+        if (w / Math.max(h, 1e-6) > rw) w = h * rw; else h = w / rw;
+        const maxW = dx >= 0 ? P.w - drag.ax : drag.ax, maxH = dy >= 0 ? P.h - drag.ay : drag.ay;
+        if (w > maxW) { w = maxW; h = w / rw; }
+        if (h > maxH) { h = maxH; w = h * rw; }
+      }
+      const x = dx >= 0 ? drag.ax : drag.ax - w, y = dy >= 0 ? drag.ay : drag.ay - h;
+      s.crop = { x: x / P.w, y: y / P.h, w: w / P.w, h: h / P.h };
+    }
+    drawView();
+    return;
+  }
+  if (tool === 'crop') {
+    const hit = cropHit(p);
+    view.style.cursor = hit === 'move' ? 'move' : hit ? CURSORS[hit] : 'crosshair';
+  }
+  if (loupeOn && tool === 'none' && e.pointerType === 'mouse') setLoupeFromPrev(p);
+});
+const endDrag = () => {
+  if (!drag) return;
+  const s = S(), P = cur.prev;
+  if (drag.mode === 'new' && (!s.crop || s.crop.w * P.w < 8 || s.crop.h * P.h < 8)) s.crop = drag.c0;
+  drag = null; drawView();
+};
+view.addEventListener('pointerup', endDrag);
+view.addEventListener('pointercancel', endDrag);
+
+// ───────── 회전·반전 ─────────
+async function transform(kind) {
+  if (!cur || busy) return;
+  showBusy('변환 중'); await nextFrame();
+  try {
+    const s = S(), cw = kind === 'rotR';
+    // 새 배열을 모두 만든 뒤에 바꿔 넣음: 메모리 부족으로 중간에 실패해도 원래 상태가 그대로 남음
+    const full = kind === 'flip' ? flipImg(cur.full) : rotateImg(cur.full, cw);
+    const prev = kind === 'flip' ? flipImg(cur.prev) : rotateImg(cur.prev, cw);
+    cur.full = full; cur.prev = prev;
+    if (kind === 'flip') {
+      s.flip = !s.flip; s.rot = (4 - s.rot) % 4; // 반전 ∘ 회전ᵏ = 회전⁻ᵏ ∘ 반전
+      if (s.crop) s.crop = cropFlip(s.crop);
+    } else {
+      s.rot = (s.rot + (cw ? 1 : 3)) % 4;
+      if (s.crop) s.crop = cw ? cropCW(s.crop) : cropCCW(s.crop);
+    }
+    cur.negImg = makeNegImage(cur.prev); cur.outImg = null; cur.areaKey = null;
+    loupePt = { x: cur.full.w / 2, y: cur.full.h / 2 };
+    reanalyze(); syncUI(); render(); fitView();
+  } catch (e) { console.error(e); toast(friendlyError(e)); }
+  finally { hideBusy(); }
+}
+
+// ───────── 내보내기 ─────────
+// ───────── 워터마크 ─────────
+// 저장하는 사진(자르기·회전 뒤의 최종 화상) 왼쪽 아래에 두 줄로 새김. 가장자리에서 짧은 변의 6%만큼 안쪽에 두어,
+// 이 도구의 자르기로는 지워지지 않고(자르기 뒤 화상에 새기므로) 다른 프로그램에서 잘라 내려면 사진 가장자리까지 잃게 함.
+// 크기·여백은 모두 짧은 변에 비례하므로 미리보기와 저장 결과에서 같은 자리·같은 비율로 보임
+const WM_LINES = ['Scanned by Posity,', '-Programmed by Yeony'];
+const WM = {
+  size: 0.025,        // 글자 크기 (짧은 변 대비)
+  inset: 0.06,        // 왼쪽·아래 가장자리에서 안쪽으로 (짧은 변 대비)
+  lead: 1.25,         // 줄 간격 (글자 크기 대비)
+  alpha: 0.85,        // 글자 불투명도
+  minPx: 11,          // 아주 작은 화상에서도 읽히는 최소 글자 크기 (px)
+};
+// 굵은 산세리프: Outfit 700(기하학적인 현대 산세리프). 받지 못하면 시스템의 굵은 산세리프로
+const wmFont = fs => `700 ${fs}px "Outfit", "Helvetica Neue", Arial, system-ui, sans-serif`;
+function wmLayout(w, h) {
+  const sh = Math.min(w, h), fs = Math.max(WM.minPx, sh * WM.size), inset = sh * WM.inset;
+  return { fs, x: inset, base: h - inset, lh: fs * WM.lead, blur: fs * 0.35, dy: fs * 0.04 };
+}
+// 캔버스 ctx의 (x0, y0)–(x0+w, y0+h) 사각형(최종 화상 영역)에 워터마크를 그림: 흰 글자 + 옅은 검은 그림자(밝은 곳에서도 읽히게)
+function drawWatermark(ctx, x0, y0, w, h) {
+  const L = wmLayout(w, h), n = WM_LINES.length;
+  ctx.save();
+  ctx.font = wmFont(L.fs); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = L.blur; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = L.dy;
+  ctx.fillStyle = `rgba(255,255,255,${WM.alpha})`;
+  WM_LINES.forEach((t, i) => ctx.fillText(t, x0 + L.x, y0 + L.base - (n - 1 - i) * L.lh));
+  ctx.restore();
+}
+// 저장용: 워터마크가 차지하는 사각형만 작은 캔버스에 그려 색과 불투명도를 읽어 둠 (띠 처리 중 실수 버퍼에 섞음)
+function wmMask(w, h) {
+  const L = wmLayout(w, h), n = WM_LINES.length, cv = document.createElement('canvas'), cx = cv.getContext('2d');
+  cx.font = wmFont(L.fs);
+  // 여유: 그림자 번짐 + 글자 모양이 글자 폭 밖으로 조금 삐져나오는 만큼
+  const tw = Math.max(...WM_LINES.map(t => cx.measureText(t).width)), pad = Math.ceil(L.blur * 2 + L.dy + 2 + L.fs * 0.2);
+  const bx0 = Math.max(0, Math.floor(L.x - pad)), by0 = Math.max(0, Math.floor(L.base - (n - 1) * L.lh - L.fs * 1.1 - pad));
+  const bx1 = Math.min(w, Math.ceil(L.x + tw + pad)), by1 = Math.min(h, Math.ceil(L.base + L.fs * 0.35 + pad));
+  const bw = bx1 - bx0, bh = by1 - by0;
+  if (bw <= 0 || bh <= 0) return null;
+  cv.width = bw; cv.height = bh;
+  drawWatermark(cx, -bx0, -by0, w, h);
+  const d = cx.getImageData(0, 0, bw, bh).data, A = new Float32Array(bw * bh), C = new Float32Array(bw * bh);
+  for (let i = 0, j = 0; i < bw * bh; i++, j += 4) { A[i] = d[j + 3] / 255; C[i] = d[j] / 255; }   // 흰 글자·검은 그림자만 있으므로 무채색 한 값
+  cv.width = cv.height = 0;
+  return { x0: bx0, y0: by0, w: bw, h: bh, A, C };
+}
+// 띠(y0부터 rh행, 너비 W, 부호화된 0–1 실수 RGB)에 워터마크를 섞음. 캔버스와 같은 '위에 덮기'(부호화 공간)
+function wmBlend(f, W, y0, rh, m) {
+  if (!m) return;
+  const ya = Math.max(y0, m.y0), yb = Math.min(y0 + rh, m.y0 + m.h);
+  for (let y = ya; y < yb; y++) {
+    const mo = (y - m.y0) * m.w, fo = ((y - y0) * W + m.x0) * 3;
+    for (let x = 0; x < m.w; x++) {
+      const a = m.A[mo + x];
+      if (a <= 0) continue;
+      const c = m.C[mo + x], k = fo + x * 3;
+      f[k] += (c - f[k]) * a; f[k + 1] += (c - f[k + 1]) * a; f[k + 2] += (c - f[k + 2]) * a;
+    }
+  }
+}
+// 글꼴이 준비된 뒤에 그려야 미리보기와 같은 모양이 됨 (막혀 있으면 기본 글꼴로, 1.5초 넘게 기다리지 않음)
+async function wmFontReady() {
+  try { await Promise.race([document.fonts.load(wmFont(16), WM_LINES.join('')), new Promise(r => setTimeout(r, 1500))]); } catch (e) { /* 기본 글꼴로 그림 */ }
+}
+
+function fullCrop(F, s) {
+  const c = s.crop || { x: 0, y: 0, w: 1, h: 1 };
+  const x = clamp(Math.round(c.x * F.w), 0, F.w - 1), y = clamp(Math.round(c.y * F.h), 0, F.h - 1);
+  return { x, y, w: clamp(Math.round(c.w * F.w), 1, F.w - x), h: clamp(Math.round(c.h * F.h), 1, F.h - y) };
+}
+async function renderFull(F, s, pp, fmt, onProg) {
+  const r = fullCrop(F, s), sh = sharpParams(s, 1, pp), STRIP = 128;
+  await wmFontReady();
+  const wm = wmMask(r.w, r.h);
+  if (fmt === 'png16') {
+    const u = new Uint16Array(r.w * r.h * 3);
+    for (let y = 0; y < r.h; y += STRIP) {
+      const rh = Math.min(STRIP, r.h - y), f = processRect(F.d, F.w, F.h, r.x, r.y + y, r.w, rh, pp, sh), o = y * r.w * 3;
+      wmBlend(f, r.w, y, rh, wm);
+      for (let i = 0; i < f.length; i++) u[o + i] = f[i] * 65535 + 0.5;
+      onProg(0.7 * (y + rh) / r.h); await tick();
+    }
+    return encodePNG16(u, r.w, r.h, f => onProg(0.7 + 0.3 * f));
+  }
+  const cv = document.createElement('canvas'); cv.width = r.w; cv.height = r.h;
+  const cx = cv.getContext('2d'), img = cx.createImageData(r.w, r.h), o = img.data;
+  for (let y = 0; y < r.h; y += STRIP) {
+    const rh = Math.min(STRIP, r.h - y), f = processRect(F.d, F.w, F.h, r.x, r.y + y, r.w, rh, pp, sh);
+    wmBlend(f, r.w, y, rh, wm);
+    for (let i = 0, j = y * r.w * 4; i < f.length; i += 3, j += 4) { o[j] = f[i] * 255; o[j + 1] = f[i + 1] * 255; o[j + 2] = f[i + 2] * 255; o[j + 3] = 255; }
+    onProg(0.85 * (y + rh) / r.h); await tick();
+  }
+  cx.putImageData(img, 0, 0);
+  const blob = await new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('이미지 인코딩에 실패했습니다. 해상도가 브라우저 한도를 넘었을 수 있습니다.'))), fmt === 'jpg' ? 'image/jpeg' : 'image/png', jpegQ()));
+  cv.width = cv.height = 0;
+  onProg(1);
+  return blob;
+}
+const EXT = { jpg: 'jpg', png8: 'png', png16: 'png' };
+const jpegQ = () => clamp(parseFloat($('#jq').value) || 0.95, 0.5, 1);
+const outName = (fr, fmt, ai) => fr.name.replace(/\.[^.]+$/, '') + (ai ? '_positive_ai.' : '_positive.') + EXT[fmt];
+
+async function exportCurrent() {
+  if (!cur || busy) return;
+  const fmt = $('#fmt').value;
+  const isAi = cur.pipe.mode === 'ai';
+  showBusy('내보내는 중', `${cur.fr.name} → ${outName(cur.fr, fmt, isAi)}`); await nextFrame();
+  try {
+    const blob = await renderFull(cur.full, S(), cur.pipe, fmt, setProg);
+    hideBusy();
+    await saveFile(outName(cur.fr, fmt, isAi), blob);
+  } catch (e) { console.error(e); hideBusy(); toast(friendlyError(e)); }
+}
+// 전체 ZIP 취소: 누르면 지금 프레임까지 마치고 그때까지의 ZIP을 저장한 뒤 멈춤
+let exportStop = false;
+$('#busyCancel').addEventListener('click', () => {
+  exportStop = true;
+  const b = $('#busyCancel'); b.disabled = true; b.textContent = '이 프레임까지 마치고 멈춥니다…';
+});
+async function exportAll() {
+  if (busy || !frames.length) return;
+  const fmt = $('#fmt').value, LIMIT = 1.8e9;
+  const showCancel = () => { const b = $('#busyCancel'); b.hidden = false; b.disabled = exportStop; if (!exportStop) b.textContent = '취소'; };
+  exportStop = false;
+  showBusy('전체 내보내는 중', ''); showCancel(); await nextFrame();
+  let zip = new ZipWriter(), part = 1, failed = [], done = 0;
+  const used = new Set();
+  const flush = async last => {
+    if (!zip.count) return;
+    hideBusy();
+    await saveFile(part === 1 && last ? 'positives.zip' : `positives_${part}.zip`, zip.finish());
+    zip = new ZipWriter(); part++;
+    if (!last) { showBusy('전체 내보내는 중', ''); showCancel(); }
+  };
+  try {
+    for (let i = 0; i < frames.length; i++) {
+      if (exportStop) break;
+      const fr = frames[i];
+      $('#busyT').textContent = `전체 내보내는 중 (${i + 1}/${frames.length})`;
+      $('#busyD').textContent = fr.name;
+      const prog = f => setProg((i + f) / frames.length);
+      try {
+        let F, pp;
+        if (cur && cur.fr === fr) { F = cur.full; pp = cur.pipe; }
+        else {
+          const img = await loadImageFile(fr.file);
+          F = orient(img, fr.s);
+          const P = downscale(F, PREVIEW_LONG);
+          const baseAuto = autoBase(P), area = filmArea(P, fr.s, baseAuto);
+          const an = { ...percentiles(analyzeHist(P, fr.s, area), fr.s.clipBlack, fr.s.clipWhite), baseAuto };
+          const ai = aiEff(fr) ? aiAnalyze(P, fr.s, an, area, {}) : null;
+          pp = buildPipe(fr.s, an, ai);
+          if (ai) ai.grain = aiGrain(F, pp);
+        }
+        const blob = await renderFull(F, fr.s, pp, fmt, f => prog(0.2 + 0.8 * f));
+        const data = new Uint8Array(await blob.arrayBuffer());
+        if (zip.size + data.length > LIMIT) await flush(false);
+        const isAi = pp.mode === 'ai';
+        let name = outName(fr, fmt, isAi), k = 2;
+        while (used.has(name)) name = outName(fr, fmt, isAi).replace(/(\.[^.]+)$/, `_${k++}$1`);
+        used.add(name);
+        zip.add(name, data); done++;
+      } catch (e) { console.error(e); failed.push(fr.name); }
+      await tick();
+    }
+    await flush(true);
+    if (exportStop) toast(done ? `취소했습니다. 그때까지 변환한 ${done}장을 저장했습니다.` : '취소했습니다.');
+    else if (failed.length) toast(`변환하지 못한 파일: ${failed.join(', ')}`);
+  } finally { hideBusy(); exportStop = false; }
+}
+
+// ───────── 이벤트 연결 ─────────
+$('#btnOpen').addEventListener('click', () => $('#file').click());
+$('#btnOpen2').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; });
+['dragenter', 'dragover'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); viewer.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (t === 'drop' || e.target === document.documentElement) viewer.classList.remove('drag'); }));
+// 끌어다 놓기: 폴더면 안쪽 파일까지(하위 폴더 포함). 항목 목록은 이벤트 안에서만 읽을 수 있어 먼저 잡아 둠
+document.addEventListener('drop', e => {
+  viewer.classList.remove('drag');
+  const dt = e.dataTransfer;
+  if (!dt) return;
+  const entries = [...(dt.items || [])].map(it => (it.kind === 'file' && it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
+  if (!entries.some(en => en.isDirectory)) { if (dt.files.length) addFiles(dt.files); return; }
+  filesFromEntries(entries).then(fs => { if (fs.length) addFiles(fs); else toast('폴더에 이미지 파일이 없습니다.'); })
+    .catch(err => { console.error(err); toast('폴더를 읽지 못했습니다. 파일을 직접 골라 주세요.'); });
+});
+async function filesFromEntries(entries) {
+  const out = [];
+  // readEntries는 한 번에 일부만 돌려주므로 빈 배열이 나올 때까지 되풀이
+  const readAll = dir => new Promise((res, rej) => {
+    const rd = dir.createReader(), acc = [];
+    const step = () => rd.readEntries(es => { if (!es.length) res(acc); else { acc.push(...es); step(); } }, rej);
+    step();
+  });
+  const walk = async en => {
+    if (en.name.startsWith('.')) return;   // 숨김 파일·폴더
+    if (en.isFile) out.push(await new Promise((res, rej) => en.file(res, rej)));
+    else if (en.isDirectory) for (const c of await readAll(en)) await walk(c);
+  };
+  for (const en of entries) await walk(en);
+  return out;
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled || !cur) return;
+  const a = b.dataset.act;
+  if (a === 'rotL' || a === 'rotR' || a === 'flip') transform(a);
+  else if (a === 'crop' || a === 'base' || a === 'gray') setTool(a);
+  else if (a === 'cropDone') setTool('none');
+  else if (a === 'cropClear') { S().crop = null; drawView(); }
+  else if (a === 'cropAuto') autoCrop();
+  else if (a === 'loupe') setLoupe(!loupeOn);
+});
+// 원본 보기: 누르고 있는 동안
+const negBtn = $('[data-act="neg"]');
+const setNeg = on => { if (negHeld === on || !cur) return; negHeld = on; drawView(); renderLoupe(); };
+negBtn.addEventListener('pointerdown', () => setNeg(true));
+['pointerup', 'pointerleave', 'pointercancel'].forEach(t => negBtn.addEventListener(t, () => setNeg(false)));
+// 프레임 이동: ← → / PageUp PageDown / Home End. 입력 요소(슬라이더 포함)에 포커스가 있으면 그 요소가 키를 씀
+document.addEventListener('keydown', e => {
+  if (e.altKey || e.ctrlKey || e.metaKey || e.target.closest('input,select,textarea,[contenteditable]')) return;
+  const n = frames.length, i = cur ? frames.indexOf(cur.fr) : -1;
+  const to = { ArrowLeft: i - 1, PageUp: i - 1, ArrowRight: i + 1, PageDown: i + 1, Home: 0, End: n - 1 }[e.key];
+  if (to === undefined || n < 2) return;
+  e.preventDefault();
+  if (!busy && to >= 0 && to < n && to !== i) {
+    openFrame(to);
+    const b = frames[to].li && frames[to].li.firstChild;
+    if (b) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,select,textarea') && e.target.type !== 'range') return;
+  if ((e.key === 'n' || e.key === 'N' || e.key === 'ㅜ') && !e.repeat) setNeg(true);
+  else if (e.key === 'Escape') setTool('none');
+  else if (e.key === 'Enter' && tool === 'crop') setTool('none');
+});
+document.addEventListener('keyup', e => { if (e.key === 'n' || e.key === 'N' || e.key === 'ㅜ') setNeg(false); });
+
+$('#selInput').addEventListener('change', e => { if (cur) { S().input = e.target.value; reanalyze(); render(); } });
+$('#selBlack').addEventListener('change', e => { if (cur) { S().blackMode = e.target.value; render(); } });
+$('#selChan').addEventListener('change', e => { if (cur) { S().channelMode = e.target.value; render(); } });
+$('#btnBaseAuto').addEventListener('click', () => { if (cur) { S().baseCode = null; reanalyze(); render(); toast('필름 베이스를 자동 감지 값으로 되돌렸습니다.'); } });
+$('#btnReset').addEventListener('click', () => {
+  if (!cur) return;
+  const s = S(), keep = {};
+  GEOM.concat('aiOff').forEach(k => { keep[k] = s[k]; });
+  Object.assign(s, DEF, keep);
+  reanalyze(); syncUI(); render();
+});
+$('#btnSync').addEventListener('click', () => {
+  if (!cur) return;
+  const src = S();
+  frames.forEach(fr => {
+    if (fr === cur.fr) return;
+    const orientChanged = fr.s.rot !== src.rot || fr.s.flip !== src.flip;
+    fr.s = { ...src, crop: orientChanged ? null : fr.s.crop, aiOff: fr.s.aiOff };
+  });
+  toast(`자르기를 뺀 설정을 다른 ${frames.length - 1}개 프레임에 적용했습니다.`);
+  queueThumbs();
+});
+$('#btnExport').addEventListener('click', exportCurrent);
+$('#btnExportAll').addEventListener('click', exportAll);
+$('#stHint').textContent = HINTS.none;
+
+// 저장 형식이 JPEG일 때만 품질 선택을 보임
+const syncFmt = () => { $('#jq').hidden = $('#fmt').value !== 'jpg'; };
+$('#fmt').addEventListener('change', () => { syncFmt(); savePrefs(); });
+$('#jq').addEventListener('change', savePrefs);
+$('#aiOn').addEventListener('change', savePrefs);
+
+// 설정 기억: Ai+ 켜짐, 저장 형식, JPEG 품질 (브라우저 저장소가 막혀 있으면 조용히 넘어감)
+const PREF_KEY = 'posity.prefs', PREF_KEY_OLD = 'negative-printer.prefs';   // 이름을 바꾸기 전(v2.8까지)에 저장한 설정도 읽음
+function savePrefs() {
+  try { localStorage.setItem(PREF_KEY, JSON.stringify({ aiOn, fmt: $('#fmt').value, jq: $('#jq').value })); } catch (e) { /* 저장소를 못 쓰면 기억하지 않음 */ }
+}
+(function loadPrefs() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(PREF_KEY) || localStorage.getItem(PREF_KEY_OLD) || 'null'); } catch (e) { p = null; }
+  if (p && typeof p === 'object') {
+    const setSel = (q, v) => { const el = $(q); if ([...el.options].some(o => o.value === v)) el.value = v; };
+    if (typeof p.fmt === 'string') setSel('#fmt', p.fmt);
+    if (typeof p.jq === 'string') setSel('#jq', p.jq);
+    if (p.aiOn === true) { aiOn = true; aiTipShown = true; $('#aiOn').checked = true; }
+  }
+  syncFmt(); syncAi();
+})();
+
+// 워터마크 글꼴을 미리 불러 두고, 준비되면 화면을 다시 그림 (캔버스 글자는 글꼴을 스스로 불러오지 않음)
+wmFontReady().then(() => { if (cur) drawView(); });
+
+// 편집한 프레임이 있으면 새로고침·창 닫기 전에 확인 (설정은 이 탭에만 있음)
+const edited = fr => Object.keys(DEF).some(k => JSON.stringify(fr.s[k]) !== JSON.stringify(DEF[k]));
+addEventListener('beforeunload', e => { if (frames.some(edited)) { e.preventDefault(); e.returnValue = ''; } });
+
+// 예기치 못한 오류도 알림으로 보여 줌 (콘솔만으로는 모르고 지나감). 같은 문구는 5초에 한 번만
+let lastErrMsg = '', lastErrT = 0;
+function reportError(err) {
+  const msg = friendlyError(err), now = performance.now();
+  if (msg === lastErrMsg && now - lastErrT < 5000) return;
+  lastErrMsg = msg; lastErrT = now;
+  toast('예기치 못한 오류가 났습니다: ' + msg);
+}
+addEventListener('error', e => { if (/ResizeObserver loop/.test(e.message || '')) return; if (e.error || e.message) reportError(e.error || e.message); });
+addEventListener('unhandledrejection', e => { if (e.reason !== THUMB_STOP) reportError(e.reason); });
+</script>
+</body>
+</html>
