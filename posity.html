@@ -39,10 +39,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
 <title>Posity — 컬러 네거티브 변환기</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&family=Outfit:wght@700&display=swap" rel="stylesheet">
 <style>
 /* ───────── 색 토큰: 색 판단을 방해하지 않도록 UI는 완전 무채색 ───────── */
 :root{
@@ -268,7 +267,6 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
     </select>
     <button id="btnExport" disabled>내보내기</button>
     <button id="btnExportAll" disabled title="모든 프레임을 각자의 설정으로 변환해 ZIP 하나로 저장">전체 ZIP</button>
-    <a class="hbtn" id="btnHelp" href="information.html#part-1" target="_blank" rel="noopener" title="사용법·원리·분석 정보 (? 키)">도움말</a>
   </header>
 
   <div class="work">
@@ -308,7 +306,6 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
           <strong>네거티브 스캔을 끌어다 놓으세요</strong>
           <p>TIFF 8·16비트(무압축, LZW, Deflate, PackBits), JPEG, PNG. 여러 장을 한 번에 넣으면 필름 스트립에 순서대로 들어갑니다.</p>
           <button id="btnOpen2">파일 선택</button>
-          <p class="help">처음이라면 <a href="information.html#s1-1" target="_blank" rel="noopener">도움말</a>을 먼저 보세요.</p>
         </div>
         <div class="loupe" id="loupe" hidden><canvas id="loupeCv" width="220" height="220"></canvas><b>1:1</b></div>
         <div class="busy" id="busy" hidden>
@@ -418,7 +415,6 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
           <li>노출·색온도·색조는 채널별 인화 노출(로그 영역)에 더해집니다. 확대기의 CMY 필터와 같은 원리입니다.</li>
           <li>가상 인화지의 S자 특성곡선(최대 농도 2.4)으로 반사율을 만든 뒤 채도·선명도를 거쳐 sRGB로 인코딩합니다.</li>
         </ol>
-        <p class="more"><a href="information.html#part-2" target="_blank" rel="noopener">도움말에서 자세히 보기</a></p>
       </details>
 
       <details class="sec how">
@@ -431,7 +427,6 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
           <li>색: 흐린 색일수록 더 살리는 바이브런스와 채도 평준화로 조금 높은 정도의 채도를 맞춥니다. 피부색은 아끼고, 거의 회색인 곳은 올리지 않아 흰색·회색이 깨끗하게 남으며, 색역을 넘지 않게 합니다.</li>
           <li>맑게: 중간 크기 세부를 키우고, 필름 그레인을 재서 색 얼룩 잡음은 거의 없애고 밝기 그레인은 디지털 사진처럼 평탄한 면에서 매끈하게 줄이되 4분의 1은 남깁니다. 선명화는 남은 잡음보다 큰 윤곽에만 겁니다.</li>
         </ol>
-        <p class="more"><a href="information.html#s1-3" target="_blank" rel="noopener">도움말에서 자세히 보기</a></p>
       </details>
 
       <div class="foot">
@@ -466,12 +461,8 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const LOG10_2 = Math.log10(2);
 const tick = () => new Promise(r => setTimeout(r, 0));
-// 이벤트 루프에 한 번 양보 (MessageChannel: setTimeout의 4ms 하한 없이 쌓인 입력·그리기를 먼저 처리하게)
-const yieldTask = (() => {
-  const ch = new MessageChannel(), q = [];
-  ch.port1.onmessage = () => { const r = q.shift(); if (r) r(); };
-  return () => new Promise(r => { q.push(r); ch.port2.postMessage(0); });
-})();
+// 이벤트 루프에 한 번 양보 (메시지 통로 없이 타이머만 사용)
+const yieldTask = tick;
 // 오래 걸리는 계산을 생성기로 쓰고 중간중간 yield: 보통은 끝까지 한 번에(runSync), 백그라운드 작업은 yield마다 쉬며(runAsync)
 function runSync(g) { for (;;) { const r = g.next(); if (r.done) return r.value; } }
 async function runAsync(g, pause) { for (;;) { const r = g.next(); if (r.done) return r.value; await pause(); } }
@@ -3166,7 +3157,6 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'n' || e.key === 'N' || e.key === 'ㅜ') && !e.repeat) setNeg(true);
   else if (e.key === 'Escape') setTool('none');
   else if (e.key === 'Enter' && tool === 'crop') setTool('none');
-  else if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) window.open('information.html#part-1', '_blank', 'noopener');
 });
 document.addEventListener('keyup', e => { if (e.key === 'n' || e.key === 'N' || e.key === 'ㅜ') setNeg(false); });
 

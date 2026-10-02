@@ -90,7 +90,7 @@ Ai+를 켜면 필름 사진을 **디지털카메라로 찍은 사진처럼** 다
 
 ### 도움말 페이지
 
-이 README의 원리·작동 방식·분석 정보를 읽기 쉬운 [도움말 페이지](https://scan.yeon.at/information.html)로도 꾸며 두었습니다. 도구 머리줄의 **도움말** 버튼이나 <kbd>?</kbd> 키로 새 탭에서 열립니다. 도움말에는 화면 구성, 단축키, 문제 해결, 용어 풀이, 참고 문헌이 더 있습니다.
+이 README의 원리·작동 방식·분석 정보를 읽기 쉬운 [도움말 페이지](https://scan.yeon.at/information.html)로도 꾸며 두었습니다. 도구와 도움말은 서로 연결하지 않은 별개의 파일이라, `information.html`을 따로 열어 보세요. 도움말에는 화면 구성, 단축키, 문제 해결, 용어 풀이, 참고 문헌이 더 있습니다.
 
 - [1부 시작하기](https://scan.yeon.at/information.html#part-1) — 처음 쓰는 순서, 화면 구성, Ai+ 보정 문구의 뜻, 단축키, 저장과 워터마크, 문제 해결
 - [2부 원리](https://scan.yeon.at/information.html#part-2) · [3부 작동 방식](https://scan.yeon.at/information.html#part-3)
@@ -611,7 +611,7 @@ flowchart LR
 
 ### 파일과 실행 환경
 
-도구 전체가 HTML·CSS·JavaScript를 담은 `posity.html` 파일 하나(약 3,206줄, 184KB)입니다. 외부 라이브러리가 없고, 서버도 필요 없습니다. 글꼴(화면의 IBM Plex Sans KR / Condensed, 워터마크의 Outfit)만 Google Fonts에서 받으며, 받지 못하면 시스템 글꼴을 씁니다. 16비트 PNG 저장과 Deflate TIFF 읽기에 `CompressionStream`·`DecompressionStream`을 쓰므로 최신 브라우저가 필요합니다. 기기(운영체제)가 어두운 모드이면 어두운 테마로, 밝은 모드이면 밝은 테마로 바뀌고, 열어 둔 채 기기 설정을 바꿔도 바로 따라갑니다. 선택 상자 목록, 체크박스, 스크롤 막대 같은 브라우저 기본 부품도 같은 테마를 씁니다. 모바일(터치) 화면을 지원합니다.
+도구 전체가 HTML·CSS·JavaScript를 담은 `posity.html` 파일 하나(약 3,206줄, 184KB)입니다. 외부 라이브러리가 없고, 서버도 필요 없습니다. 글꼴(화면의 IBM Plex Sans KR / Condensed, 워터마크의 Outfit)은 내려받지 않고, 기기에 설치되어 있으면 그것을, 없으면 시스템 글꼴을 씁니다. 파일 안에는 바깥으로 요청을 보내는 코드가 없고, 브라우저 보안 규칙(CSP)으로도 모든 외부 요청을 막아 둡니다. 16비트 PNG 저장과 Deflate TIFF 읽기에 `CompressionStream`·`DecompressionStream`을 쓰므로 최신 브라우저가 필요합니다. 기기(운영체제)가 어두운 모드이면 어두운 테마로, 밝은 모드이면 밝은 테마로 바뀌고, 열어 둔 채 기기 설정을 바꿔도 바로 따라갑니다. 선택 상자 목록, 체크박스, 스크롤 막대 같은 브라우저 기본 부품도 같은 테마를 씁니다. 모바일(터치) 화면을 지원합니다.
 
 ### 구성
 
