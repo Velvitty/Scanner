@@ -205,7 +205,7 @@ figure{margin:0}
 <a class="skip" href="#content">본문으로 건너뛰기</a>
 <header class="top">
   <button class="btn" id="tocBtn" type="button" aria-controls="side" aria-expanded="false">목차</button>
-  <div class="brand"><span class="chip" aria-hidden="true"></span>Posity 도움말 <small>사용법 · 원리 · 분석 정보</small> <span class="ver">v2.11.3</span></div>
+  <div class="brand"><span class="chip" aria-hidden="true"></span>Posity 도움말 <small>사용법 · 원리 · 분석 정보</small> <span class="ver">v2.11.4</span></div>
   <a class="btn primary" href="posity.html">Posity 열기</a>
 </header>
 <div class="layout">
@@ -413,9 +413,19 @@ figure{margin:0}
 </div></figure>
 <h3 id="s3-2">3-2. 불러오기</h3>
 <p>TIFF는 자체 디코더로 읽습니다. 8·16비트 정수와 32비트 실수, 무압축·LZW·Deflate·PackBits 압축, 스트립·타일 배치, 청크·플래너 배열을 지원합니다. JPEG와 PNG는 브라우저의 디코더로 읽으므로 8비트입니다. 모든 입력은 채널당 16비트 정수 배열로 통일합니다.</p>
-<p>원본과 별도로 긴 변 1800px의 미리보기 축소본을 만들어 분석과 화면에 쓰고, 원본 해상도 계산은 1:1 확대경과 저장할 때만 합니다. 원본은 2억 화소까지 받습니다. 16비트 RGB로 약 1.2GB이며, 그보다 크면 브라우저 메모리 한도에 걸립니다.</p>
+<div class="mb">\[v = 257\,v_8\ \ (\text{8비트}),\qquad
+v = \big\lfloor 65535\ \mathrm{clip}(f, 0, 1) + 0.5 \big\rfloor\ \ (\text{32비트 실수})\]</div>
+<p>8비트는 0이 0, 255가 65535가 되도록 늘립니다. TIFF의 수평 차분 예측자(Predictor 2)는 <span class="mi">\(v_i \leftarrow (v_i + v_{i-n}) \bmod 2^{b}\)</span> (<span class="mi">\(n\)</span> 은 픽셀당 표본 수, <span class="mi">\(b\)</span> 는 표본 비트 수)로 되돌리고, 0이 흰색인 흑백(WhiteIsZero)은 <span class="mi">\(v \leftarrow 65535 - v\)</span> 로 뒤집으며, 흑백은 세 채널에 같은 값을 넣습니다.</p>
+<p>원본과 별도로 긴 변 1800px의 미리보기 축소본을 만들어 분석과 화면에 쓰고, 원본 해상도 계산은 1:1 확대경과 저장할 때만 합니다. 축소는 면적 평균입니다. 원본 <span class="mi">\(W \times H\)</span> 에서 <span class="mi">\(k = \max(W, H)/1800\)</span> (<span class="mi">\(k \le 1\)</span> 이면 줄이지 않음), <span class="mi">\(w = \mathrm{round}(W/k)\)</span>, <span class="mi">\(h = \mathrm{round}(H/k)\)</span> 로 두고, 축소본의 칸마다 그 칸이 덮는 원본 블록을 평균합니다.</p>
+<div class="mb">\[\bar v(x, y) = \left\lfloor \frac{1}{\lvert A_{xy}\rvert} \sum_{(i, j) \in A_{xy}} v(i, j) + 0.5 \right\rfloor,\qquad
+A_{xy} = \left[\left\lfloor \tfrac{xW}{w} \right\rfloor,\ \left\lfloor \tfrac{(x+1)W}{w} \right\rfloor\right) \times \left[\left\lfloor \tfrac{yH}{h} \right\rfloor,\ \left\lfloor \tfrac{(y+1)H}{h} \right\rfloor\right)\]</div>
+<p>블록은 가로·세로로 적어도 한 픽셀입니다. 원본은 2억 화소까지 받습니다. 16비트 RGB로 약 1.2GB이며, 그보다 크면 브라우저 메모리 한도에 걸립니다.</p>
 <h3 id="s3-3">3-3. 필름과 베이스 찾기</h3>
 <p><strong>베이스 자동 감지</strong>는 주황색 순서(<span class="mi">\(R \ge G \ge B\)</span>)를 만족하는 픽셀 가운데 가장 밝은 0.3%(최소 50개)의 평균입니다. 노광되지 않은 필름이 빛을 가장 많이 통과시키기 때문입니다. 스캐너 클리핑(코드값 98.5% 이상)은 제외하며, 주황색 픽셀이 500개와 전체의 2% 중 큰 값보다 적으면 색 조건 없이 다시 찾습니다.</p>
+<p>'가장 밝은 0.3%'는 64단계로 묶어 고릅니다. 후보 픽셀 <span class="mi">\(n\)</span> 개의 세 채널 평균 코드 <span class="mi">\(\bar v_i = (R_i + G_i + B_i)/3\)</span> 를 칸 <span class="mi">\(b_i = \lfloor \bar v_i / 64 \rfloor\)</span> (1,024칸)로 나누고, 가장 밝은 칸부터 픽셀 수를 더해 <span class="mi">\(N^* = \max(50,\ 0.003\,n)\)</span> 에 처음 닿는 칸 <span class="mi">\(b^*\)</span> 를 찾습니다. 베이스는 <span class="mi">\(b_i \ge b^*\)</span> 인 픽셀들의 채널별 평균 코드이고, 투과율은 이 코드를 반올림해 스캔 값과 같은 식(<span class="mi">\(\mathrm{dec}\)</span>)으로 바꾼 값입니다.</p>
+<div class="mb">\[\bar v^{\,b}_c = \frac{1}{\lvert \mathcal B\rvert} \sum_{i \in \mathcal B} v_{c,i},\qquad
+\mathcal B = \{\, i : b_i \ge b^* \,\},\qquad
+T_{b,c} = \mathrm{dec}\!\left(\frac{\mathrm{round}(\bar v^{\,b}_c)}{65535}\right)\]</div>
 <p><strong>필름 영역 마스크</strong>는 베이스 대비 밀도로 픽셀을 세 종류로 나눕니다.</p>
 <div class="tw"><table>
 <thead>
@@ -444,9 +454,20 @@ figure{margin:0}
 </tbody>
 </table></div>
 <p>마스크에서 필름 테두리를 찾아 통계 영역을 좁히고, 자르기의 자동 맞춤에도 씁니다. 그 안에서 '분석 제외 테두리'(기본 3%)만큼을 한 번 더 뺍니다.</p>
+<p>테두리는 가장자리에서 한 줄씩 안으로 걸어 들어가며 찾습니다. 위아래는 행, 좌우는 열 단위로, 그 줄에서 필름 밖 픽셀의 비율이 0.6 이상이면 테두리로 보고 다음 줄로 넘어가되 한 변에서 화상 크기의 30%까지만 들어갑니다. 그다음 비스듬히 걸친 홀더 쐐기를 걷어내려고 비율이 0.15 이상인 줄을 5%까지 더 걷어냅니다. 찾은 쪽은 경계의 번짐을 피해 <span class="mi">\(k = \max\big(3,\ \mathrm{round}(0.004 \max(W, H))\big)\)</span> 픽셀 더 안으로 들이고, 남은 영역이 가로나 세로로 화상의 20% 이하이면 테두리를 못 찾은 것으로 봅니다. 자동 맞춤은 필름 밖과 베이스 같은 픽셀을 함께 테두리로 보고 비율 0.6과 0.3으로 같은 일을 합니다.</p>
+<p>분석 영역은 자르기 사각형 <span class="mi">\((x, y, w, h)\)</span> 를 여백 비율 <span class="mi">\(m\)</span> 만큼 줄인 사각형과 필름 테두리 안쪽의 교집합입니다. 교집합이 줄인 사각형 넓이의 5%보다 작으면 줄인 사각형만 씁니다.</p>
+<div class="mb">\[\big[x + m w,\ x + (1 - m) w\big] \times \big[y + m h,\ y + (1 - m) h\big]\]</div>
 <h3 id="s3-4">3-4. 그림자·하이라이트 기준 찾기</h3>
-<p>그레인 한 알이 극단값을 정하지 않도록, 먼저 화상 픽셀의 세 채널 평균 로그 투과율을 5×5 이웃으로 평균한 <strong>순위 지도</strong>를 만듭니다. 이 순위로 로그 투과율 −6에서 0까지를 0.001 간격(6,144칸)으로 나눈 <strong>결합 히스토그램</strong>을 쌓되, 칸마다 세 채널의 선형 투과율 합도 함께 누적합니다.</p>
-<p>가장 얇은 쪽 꼬리(그림자 클리핑, 기본 0.1%)와 가장 짙은 쪽 꼬리(하이라이트 클리핑, 기본 0.1%)에서 필요한 픽셀 수만큼을 모으고, 마지막 칸은 필요한 비율만큼만 더합니다. 그 무리의 채널별 평균 투과율이 그림자 기준과 하이라이트 기준이 됩니다. 통계에서 필름이 아닌 픽셀을 뺐더니 5%도 남지 않으면(베이스 오인 등) 제외 없이 다시 계산합니다.</p>
+<p>그레인 한 알이 극단값을 정하지 않도록, 먼저 화상 픽셀의 세 채널 평균 로그 투과율을 5×5 이웃으로 평균한 <strong>순위 지도</strong>를 만듭니다. 이 순위로 로그 투과율 −6에서 0까지를 <span class="mi">\(1/1024\)</span> 간격(6,144칸)으로 나눈 <strong>결합 히스토그램</strong>을 쌓되, 칸마다 세 채널의 선형 투과율 합도 함께 누적합니다.</p>
+<div class="mb">\[\bar\lambda_i = \frac{1}{3} \sum_c \log_{10} T_{c,i},\qquad
+\rho_i = \frac{\sum_{j \in N_5(i)} m_j\, \bar\lambda_j}{\sum_{j \in N_5(i)} m_j},\qquad
+q_i = \mathrm{clip}\big(\lfloor 1024\,(\rho_i + 6) \rfloor,\ 0,\ 6143\big)\]</div>
+<p><span class="mi">\(N_5(i)\)</span> 는 5×5 이웃(화상 밖은 가장자리 값을 늘여 씀)이고, <span class="mi">\(m_j\)</span> 는 필름 픽셀이면 1, 필름 밖이거나 어두운 쪽이 잘린 픽셀이면 0입니다. 이웃에 필름 픽셀이 없으면 자기 값 <span class="mi">\(\bar\lambda_i\)</span> 를 씁니다. 칸 <span class="mi">\(q\)</span> 의 픽셀 수를 <span class="mi">\(n_q\)</span>, 선형 투과율 합을 <span class="mi">\(\Sigma_{q,c}\)</span> 라 합니다.</p>
+<p>가장 얇은 쪽 꼬리(그림자 클리핑, 기본 0.1%)와 가장 짙은 쪽 꼬리(하이라이트 클리핑, 기본 0.1%)에서 필요한 픽셀 수만큼을 모으고, 마지막 칸은 필요한 비율만큼만 더합니다. 그 무리의 채널별 평균 투과율이 그림자 기준과 하이라이트 기준이 됩니다. 꼬리 비율 <span class="mi">\(p\)</span> 는 0.02%보다 작게 잡지 않습니다.</p>
+<div class="mb">\[N^* = \max\!\big(1,\ n \cdot \max(p,\ 0.02\%)\big),\qquad
+f_q = \mathrm{clip}\!\left(\frac{N^* - \sum_{q' \text{ 먼저}} f_{q'}\, n_{q'}}{n_q},\ 0,\ 1\right),\qquad
+\bar T_c = \frac{\sum_q f_q\, \Sigma_{q,c}}{\sum_q f_q\, n_q}\]</div>
+<p>칸은 그 꼬리의 끝에서부터 차례로 보며, '먼저'는 그 앞에 본 칸들입니다. 평균 투과율의 로그는 <span class="mi">\(-6\)</span> 아래로 내리지 않고, 두 기준이 너무 가까우면 <span class="mi">\(\log_{10} \bar T^{\,\mathrm{thin}}_c \ge \log_{10} \bar T^{\,\mathrm{dense}}_c + 0.01\)</span> 이 되도록 얇은 쪽을 올립니다. 통계에서 필름이 아닌 픽셀을 뺐더니 5%도 남지 않으면(베이스 오인 등) 제외 없이 다시 계산합니다.</p>
 <p>스캔할 때 어두운 쪽이 잘린 채널도 따로 다룹니다. 주황 마스크 때문에 8비트 스캔의 파랑(때로는 초록·빨강) 채널이 바닥값(코드 0~2)에 붙는 일이 흔한데, 그런 픽셀의 밀도는 알 수 없습니다. 필름 영역 안에서(스캔에 함께 찍힌 검은 홀더 테두리처럼 필름이 아닌 부분은 빼고) 한 채널의 바닥값 픽셀이 0.5% 넘게 쌓였으면 그 채널이 잘린 것으로 보고, 해당 픽셀을 기준을 잡는 통계와 Ai+ 분석에서 빼며, 변환표에서는 바닥값을 잘리지 않은 첫 값으로 붙입니다. 이때 사진을 열면 어느 채널이 얼마나 잘렸는지 알림으로 알려 줍니다. 잘림이 그보다 적으면 기준 꼬리에 거의 영향이 없어 그대로 둡니다.</p>
 <h3 id="s3-5">3-5. 변환표 (LUT)</h3>
 <p>슬라이더를 움직일 때마다 채널마다 65,536칸짜리 변환표를 새로 만듭니다. 칸 번호가 16비트 스캔 값이고, 칸의 내용은 그 값의 최종 선형 출력입니다. 픽셀 처리는 채널당 표 조회 한 번과 몇 번의 곱셈뿐이라, 슬라이더에 즉시 반응합니다.</p>
@@ -479,6 +500,7 @@ figure{margin:0}
 </tr>
 </tbody>
 </table></div>
+<p>저장 값은 부호화된 값 <span class="mi">\(c''\)</span> (0~1)에서 8비트가 <span class="mi">\(\mathrm{round}(255\,c'')\)</span> (정확히 가운데이면 짝수 쪽, 캔버스와 같은 규칙), 16비트가 <span class="mi">\(\lfloor 65535\,c'' + 0.5 \rfloor\)</span> 입니다. 화면 미리보기도 같은 8비트 규칙을 씁니다.</p>
 <p><strong>워터마크.</strong> 모든 저장 결과(JPEG, PNG8, PNG16, 전체 ZIP)의 왼쪽 아래에 두 줄로 새깁니다.</p>
 <pre><code>Scanned by Posity,
 -Programmed by Yeony
@@ -521,7 +543,7 @@ figure{margin:0}
 </tr>
 <tr>
 <td>히스토그램</td>
-<td>결과의 RGB 분포</td>
+<td>자르기 영역 결과의 8비트 RGB 분포. 채널마다 256칸, 높이는 <span class="mi">\(\min\!\big(1, \sqrt{h_b / h_{\max}}\big)\)</span> (<span class="mi">\(h_{\max}\)</span> 는 양 끝 칸을 뺀 가장 높은 칸). 0이나 255에 0.2% 넘게 몰리면 그쪽 모서리에 흰 삼각형</td>
 </tr>
 <tr>
 <td>보정 초기화</td>
@@ -537,6 +559,7 @@ figure{margin:0}
 </tr>
 </tbody>
 </table></div>
+<p>자르기 비율 <span class="mi">\(R\)</span> 에 맞출 때는 상자가 가로로 길면 <span class="mi">\(\rho = R\)</span>, 세로로 길면 <span class="mi">\(\rho = 1/R\)</span> 로 두고, 상자 <span class="mi">\(w \times h\)</span> 안에 <span class="mi">\(w' = \min(w,\ h\rho)\)</span>, <span class="mi">\(h' = w'/\rho\)</span> 를 가운데 맞춤으로 놓습니다. 비율을 바꿀 때는 지금 상자의 중심을 지키고, 화상 밖으로 나가면 전체를 줄입니다.</p>
 <p>설정은 프레임마다 따로 저장되며, 편집한 프레임이 있으면 새로고침·창 닫기 전에 브라우저가 확인을 묻습니다. 키보드는 ← → 또는 PageUp·PageDown으로 이전·다음 프레임, Home·End로 처음·마지막 프레임, Esc로 도구 해제, 자르기 중 Enter로 자르기 완료입니다. 슬라이더에 포커스가 있을 때의 ← → 는 슬라이더 값을 바꿉니다. 필름 띠에서 읽을 수 없는 파일은 '읽을 수 없음'으로 표시되고, 마우스를 올리면 이유가 보입니다. 입력 선택지와 슬라이더는 다음과 같습니다.</p>
 <div class="tw"><table>
 <thead>
@@ -669,7 +692,7 @@ figure{margin:0}
 u / 12.92 &amp; u \le 0.04045 \\[2pt]
 \left(\dfrac{u + 0.055}{1.055}\right)^{2.4} &amp; \text{그 밖}
 \end{cases}\]</div>
-<p>선형 인코딩은 <span class="mi">\(\mathrm{dec}(u) = u\)</span>, 감마 2.2는 <span class="mi">\(\mathrm{dec}(u) = u^{2.2}\)</span> 입니다. 로그 투과율 <span class="mi">\(\log_{10} T\)</span> 는 65,536칸 표로 미리 계산해 둡니다.</p>
+<p>선형 인코딩은 <span class="mi">\(\mathrm{dec}(u) = u\)</span>, 감마 2.2는 <span class="mi">\(\mathrm{dec}(u) = u^{2.2}\)</span> 입니다. 로그 투과율 <span class="mi">\(\log_{10} T\)</span> 는 65,536칸 표로 미리 계산해 둡니다. <span class="mi">\(T\)</span> 는 <span class="mi">\(10^{-6}\)</span> 에서 잘라 <span class="mi">\(\log_{10} T \ge -6\)</span> 입니다. 어두운 쪽이 잘린 채널은 바닥값 <span class="mi">\(v \le 514\)</span> (8비트 코드 0~2)의 로그 투과율을 <span class="mi">\(\log_{10} T(515)\)</span> 로 바꿔 씁니다.</p>
 <h4 id="s4-1-2">4-1-2. 기존 방식</h4>
 <p><strong>베이스 대비 밀도.</strong> <span class="mi">\(T_{b,c}\)</span> 는 베이스 투과율입니다.</p>
 <div class="mb">\[D_c = \log_{10} T_{b,c} - \log_{10} T_c\]</div>
@@ -696,29 +719,41 @@ y_c = \max\!\left(0,\ \frac{R(x_c) - R(0)}{R(1) - R(0)}\right)\]</div>
 <p>중간 기울기는 <span class="mi">\(D_{\max}\, g / 4 = 3.0\)</span>(정규화 단위당 밀도)입니다. 장면 범위가 8스톱이면 스톱당 약 0.38 밀도이고, 반사율 기준 전체 감마는 약 1.25로 실제 인화의 대비와 비슷합니다.</p>
 <p><strong>채도(휘도 보존)와 부호화.</strong> <span class="mi">\(s = \text{채도} \times 1.1\)</span> 입니다.</p>
 <div class="mb">\[Y = \sum_c w_c\, y_c,\qquad y'_c = Y + s\,(y_c - Y)\]</div>
-<p>값을 <span class="mi">\([0,1]\)</span> 로 자른 뒤 sRGB로 부호화합니다.</p>
-<p><strong>선명화(언샤프 마스크, 부드러운 문턱).</strong> <span class="mi">\(Y'\)</span> 는 부호화된 휘도, <span class="mi">\(G_\sigma\)</span> 는 가우시안, <span class="mi">\(a\)</span> 는 양, <span class="mi">\(\theta\)</span> 는 노이즈 임계값입니다.</p>
+<p>값을 <span class="mi">\([0,1]\)</span> 로 자른 뒤 sRGB로 부호화합니다. 부호화는 16비트 정밀도의 65,536칸 표로 합니다.</p>
+<div class="mb">\[\mathrm{enc}(y) =
+\begin{cases}
+12.92\,y &amp; y \le 0.0031308 \\[2pt]
+1.055\,y^{1/2.4} - 0.055 &amp; \text{그 밖}
+\end{cases},\qquad
+c' = \mathrm{enc}\!\left(\frac{\lfloor 65535\, y'_c + 0.5 \rfloor}{65535}\right)\]</div>
+<p><strong>선명화(언샤프 마스크, 부드러운 문턱).</strong> <span class="mi">\(Y' = \sum_c w_c\, c'_c\)</span> 는 부호화된 값에 같은 가중치를 건 휘도, <span class="mi">\(G_\sigma\)</span> 는 가우시안, <span class="mi">\(a\)</span> 는 양, <span class="mi">\(\theta\)</span> 는 노이즈 임계값입니다.</p>
 <div class="mb">\[d = Y' - G_\sigma * Y',\qquad
 d' = a\, d\, \min\!\left(1, \frac{\lvert d\rvert}{\theta}\right),\qquad
-c'' = c' + d'\]</div>
-<p><span class="mi">\(\lvert d\rvert &lt; \theta\)</span> 인 잔물결은 <span class="mi">\(a\,d\lvert d\rvert/\theta\)</span> 로 약하게만 키워, 그레인이 거칠어지지 않습니다.</p>
+c'' = \mathrm{clip}(c' + d',\ 0,\ 1)\]</div>
+<p><span class="mi">\(\lvert d\rvert &lt; \theta\)</span> 인 잔물결은 <span class="mi">\(a\,d\lvert d\rvert/\theta\)</span> 로 약하게만 키워, 그레인이 거칠어지지 않습니다. 가우시안은 반경 <span class="mi">\(r = \max(1, \lceil 3\sigma \rceil)\)</span> 에서 자르고 합이 1이 되게 나눈 분리형 <span class="mi">\(G_\sigma(i) \propto e^{-i^2/2\sigma^2}\)</span> 이며, 화상 밖은 가장자리 값을 늘여 씁니다. <span class="mi">\(\sigma\)</span> 는 반경 슬라이더에 화면 배율(미리보기 너비 / 원본 너비, 저장과 확대경은 1)을 곱한 값입니다.</p>
 <p><strong>회색 스포이트.</strong> 찍은 5×5 영역의 사용자 색 보정 이전 로그 노출(스톱) <span class="mi">\(\ell_c\)</span> 에 대해 다음과 같습니다.</p>
 <div class="mb">\[o_c = \bar\ell - \ell_c,\qquad
 t = \frac{o_R - o_B}{2},\qquad
 m = \frac{\tfrac12 o_R - o_G + \tfrac12 o_B}{1.5}\]</div>
+<p><span class="mi">\(t, m\)</span> 은 슬라이더 범위 <span class="mi">\([-2, 2]\)</span> 로 자릅니다. Ai+가 켜져 있으면 <span class="mi">\(\ell_c\)</span> 대신 화이트밸런스 뒤의 로그 밝기 <span class="mi">\(\tilde\ell_c\)</span> 를 씁니다.</p>
 <h4 id="s4-1-3">4-1-3. Ai+</h4>
 <p><strong>① 선형 빛.</strong> 기존 방식(슬라이더 중립)의 정규화 로그 노출을 선형 빛으로 바꿉니다. 하이라이트 기준이 1, 그림자 기준이 <span class="mi">\(2^{-S}\)</span> 입니다.</p>
 <div class="mb">\[x_c = \frac{D_c - D^{\mathrm{lo}}_c}{r_c},\qquad e_c = 2^{\,S (x_c - 1)}\]</div>
 <p>채널별 정규화로 세 채널이 같은 스톱 범위를 갖게 되므로 모두 같은 <span class="mi">\(S\)</span> 를 씁니다. 이는 층마다 감마를 <span class="mi">\(\gamma_c = r_c / (S \log_{10} 2)\)</span> 로 추정해 되돌리는 것과 같습니다.</p>
+<p>분석은 긴 변을 768px로 줄인 지도에서 합니다. 축소본과 같은 칸 나누기(<span class="mi">\(k = \max(1, \max(W, H)/768)\)</span>)로 칸마다 <span class="mi">\(e_c\)</span> 를 면적 평균하되, 필름 픽셀만 평균하고(칸에 필름 픽셀이 없으면 전부), 칸의 필름 비율 <span class="mi">\(V\)</span> 와 베이스 같은 비율 <span class="mi">\(B_f\)</span> 를 함께 적습니다. 통계에는 분석 영역 안에서 <span class="mi">\(V &gt; 0.6\)</span> 인 칸을 쓰고(400칸보다 적으면 영역의 모든 칸), 그 가운데 <span class="mi">\(B_f \ge 0.5\)</span> 인 칸은 빼되 빼고 남는 칸이 40% 미만이면 둡니다. 남은 칸이 64개보다 적으면 Ai+ 분석을 하지 않고 기존 방식으로 그립니다.</p>
 <p><strong>② 로그와 색도.</strong></p>
 <div class="mb">\[\ell_c = \log_2(e_c + \varepsilon),\ \ \varepsilon = 5\times10^{-4},\qquad
 \tau = \frac{\ell_R - \ell_B}{2},\qquad
 \mu = \frac{\ell_R + \ell_B}{2} - \ell_G\]</div>
-<p><span class="mi">\(\tau\)</span> 는 호박색–파랑 축, <span class="mi">\(\mu\)</span> 는 마젠타–초록 축(단위: 스톱)입니다.</p>
+<p><span class="mi">\(\tau\)</span> 는 호박색–파랑 축, <span class="mi">\(\mu\)</span> 는 마젠타–초록 축(단위: 스톱)입니다. 휘도의 로그는 <span class="mi">\(L_i = \log_2 \max(Y_i, 10^{-5})\)</span> 입니다. 분위수 <span class="mi">\(q_p\)</span> 는 −17…3스톱을 4,000칸(0.005스톱)으로 나눈 히스토그램에서 누적 비율이 <span class="mi">\(p\)</span> 에 처음 닿는 칸의 가운데 값입니다.</p>
 <p><strong>③ 중성 후보.</strong> 화밸 추정은 밝은 픽셀·회색 세계·회색 경계 같은 전역 통계로는 되지 않습니다. 세 방법 모두 선형값의 가장 밝은 부분에 지배되는데, 기존 방식의 채널별 정규화가 그곳(가장 짙은 0.1%)을 이미 중성으로 강제해 두어 추정치가 늘 0 근처로 나오기 때문입니다(4-4). 대신 밝기 구간마다 '무채색일 법한 곳'을 찾습니다. 3×3 평균한 로그값의 색도 <span class="mi">\((\tau_i, \mu_i)\)</span> 와 휘도 <span class="mi">\(L_i\)</span> 를 재고, <span class="mi">\([q_{1}, q_{99}]\)</span> 를 0.75스톱 폭의 구간 <span class="mi">\(K\)</span> 개(4~10)로 나눕니다. 픽셀 가중은 다음과 같습니다.</p>
 <div class="mb">\[w_i = \exp\!\left(-\frac{\tau_i^2}{2\cdot 0.18^2} - \frac{\mu_i^2}{2\cdot 0.12^2}\right)\cdot
 \big(0.7 + 0.3\min(1, t_i / 0.04)\big)\]</div>
-<p><span class="mi">\(t_i\)</span> 는 3×3 평균 휘도와 9×9 평균 휘도의 차(결)로, 하늘처럼 매끈한 면은 조금 덜 봅니다. 구간마다 0.015스톱 칸의 색도 격자에 <span class="mi">\(w_i\)</span> 를 더하되, 지도 위 16px 칸 안에서는 한 색도 칸에 24픽셀까지만 셉니다. 큰 단색 면(하늘, 나무, 잔디)이 표를 독차지하지 못하게 하는 장치입니다. 격자를 이항 커널로 두 번 흐려 봉우리를 찾고(격자 가장자리 2칸은 제외), 봉우리 ±0.045스톱 창 안의 가중 평균을 그 구간의 후보 <span class="mi">\((\tau_k, \mu_k)\)</span> 로 삼습니다. 구간 신뢰는</p>
+<p><span class="mi">\(t_i\)</span> 는 3×3 평균 휘도와 9×9 평균 휘도의 차(결)로, 하늘처럼 매끈한 면은 조금 덜 봅니다. 구간 번호는 다음과 같고, 범위 밖 픽셀은 세지 않습니다.</p>
+<div class="mb">\[k_i = \left\lfloor K\,\frac{L_i - q_1}{\Delta} \right\rfloor,\qquad
+\Delta = \max(q_{99} - q_1,\ 1),\qquad
+K = \mathrm{clip}\big(\mathrm{round}(\Delta / 0.75),\ 4,\ 10\big)\]</div>
+<p>색도 격자는 <span class="mi">\(\tau \in [-0.55, 0.55]\)</span>, <span class="mi">\(\mu \in [-0.4, 0.4]\)</span> 를 0.015스톱 간격으로 나눈 것이고, 픽셀은 가장 가까운 칸에 들어갑니다. 구간마다 이 격자에 <span class="mi">\(w_i\)</span> 를 더하되, 지도 위 16px 칸 안에서는 한 색도 칸에 24픽셀까지만 셉니다. 큰 단색 면(하늘, 나무, 잔디)이 표를 독차지하지 못하게 하는 장치입니다. 격자를 이항 커널 <span class="mi">\([1, 4, 6, 4, 1]/16\)</span> 으로 가로·세로 두 번 흐려(격자 밖은 0) 봉우리를 찾고(격자 가장자리 2칸은 제외), 봉우리 ±0.045스톱 창 안의 가중 평균을 그 구간의 후보 <span class="mi">\((\tau_k, \mu_k)\)</span> 로 삼습니다. 구간 신뢰는</p>
 <div class="mb">\[c_k = \min\!\left(1, \frac{n^{\mathrm{cell}}_k}{8}\right)\cdot
 \mathrm{clip}\left(\frac{d_k - 0.08}{0.32}, 0, 1\right)\cdot
 \exp\!\left(-\frac{1}{4}\left(\frac{\tau_k^2}{2\cdot 0.18^2} + \frac{\mu_k^2}{2\cdot 0.12^2}\right)\right)\]</div>
@@ -726,16 +761,29 @@ m = \frac{\tfrac12 o_R - o_G + \tfrac12 o_B}{1.5}\]</div>
 <p><strong>④ 구간 간 합의.</strong> 구간 값들을 밝기의 함수로 맞춥니다. <span class="mi">\(z_k \in [-\tfrac12, \tfrac12]\)</span> 를 구간의 위치라 하면</p>
 <div class="mb">\[c(z) = p_0 + p_b\,(1 - 4z^2)\]</div>
 <p>로, 상수와 가운데 굽음만 둡니다. 굽음은 층마다 특성곡선 모양이 달라 양 끝은 맞아도 중간 톤만 물드는 크로스오버를 담습니다. 기울기 항은 일부러 두지 않습니다. 양 끝은 기존 방식이 이미 중성으로 맞춰 둔 곳이라 그곳 후보(하늘, 전등)는 캐스트가 아닌 그 물체의 색이기 쉽고, 기울기를 허용하면 깨끗한 장면의 밝은 끝이 ±5 b* 만큼 기울었습니다(4-4). 같은 이유로 구간 가중에 <span class="mi">\(1 - \lvert 2z\rvert^{p}\)</span> 를 곱해 양 끝을 덜 봅니다(어두운 쪽 <span class="mi">\(p = 6\)</span>, 밝은 쪽 <span class="mi">\(p = 2\)</span>: 밝은 쪽이 발광체·하늘에 더 자주 차지됩니다). 적합은 Tukey 이중가중 IRLS 6회(척도 0.3스톱)로, 다른 구간과 동떨어진 구간은 버려집니다. 굽음 항에는 증거 합의 1%를 능형 안정화로 더합니다. 축(τ, μ)마다 따로 풉니다.</p>
-<p>증거 <span class="mi">\(E = \sum_k w^{\mathrm{fin}}_k \cdot \exp\!\big(-(\mathrm{rms}/0.1)^2\big)\)</span> 는 최종 가중의 합에 잔차의 일관성을 곱한 것이고, 신뢰는 <span class="mi">\(\min(1, E/2)\)</span> 입니다. 여기에 장면 평균색과의 일치를 곱합니다. 중간 밝기 <span class="mi">\([q_{10}, q_{95}]\)</span> 픽셀의 로그 색도 평균 <span class="mi">\(g\)</span> 가 후보 합의의 가운데 값 <span class="mi">\(c(0)\)</span> 와 같은 방향으로 절반 이상이면 1, 반대 방향이면 0입니다. 나무나 잔디가 후보를 차지했을 때 장면 전체가 그 방향이 아니면 보정을 줄이는 안전장치입니다. 상수 항에는 0.03스톱의 소프트 문턱을 둡니다(큰 면이 기준 회색과 조금 어긋나 있을 때의 과보정을 막는 보험). 신뢰를 곱한 <span class="mi">\(\tau(z), \mu(z)\)</span> 를 <span class="mi">\(\pm 0.5, \pm 0.35\)</span> 스톱으로 한정하고, 가운데 값이 따뜻한 쪽이면 일부를 남깁니다.</p>
+<div class="mb">\[\min_{p_0,\,p_b}\ \sum_k w_k \big(y_k - p_0 - p_b B_k\big)^2 + \lambda\, p_b^2,\qquad
+B_k = 1 - 4 z_k^2,\quad z_k = \frac{k + 0.5}{K} - 0.5,\quad \lambda = 0.01 \sum_k w_k\]</div>
+<div class="mb">\[w^{(0)}_k = c_k \big(1 - \lvert 2 z_k\rvert^{p}\big),\qquad
+w_k \leftarrow w^{(0)}_k \big(1 - \rho_k^2\big)_+^2,\quad \rho_k = \frac{y_k - p_0 - p_b B_k}{0.3}\]</div>
+<p>신뢰 <span class="mi">\(c_k \le 0.03\)</span> 인 구간은 쓰지 않고, 쓸 구간이 셋보다 적으면 굽음 없이 상수만 맞춥니다(<span class="mi">\(p_b = 0\)</span>). 아래 rms는 최종 가중으로 잰 잔차의 제곱평균제곱근 <span class="mi">\(\sqrt{\sum_k w_k r_k^2 / \sum_k w_k}\)</span> (<span class="mi">\(r_k = y_k - p_0 - p_b B_k\)</span>)입니다.</p>
+<p>증거 <span class="mi">\(E = \sum_k w^{\mathrm{fin}}_k \cdot \exp\!\big(-(\mathrm{rms}/0.1)^2\big)\)</span> 는 최종 가중의 합에 잔차의 일관성을 곱한 것이고, 신뢰는 <span class="mi">\(\min(1, E/2)\)</span> 입니다. 여기에 장면 평균색과의 일치를 곱합니다. 중간 밝기 <span class="mi">\([q_{10}, q_{95}]\)</span> 픽셀의 로그 색도 평균 <span class="mi">\(g\)</span> 가 후보 합의의 가운데 값 <span class="mi">\(c(0)\)</span> 와 같은 방향으로 절반 이상이면 1, 반대 방향이면 0입니다. 나무나 잔디가 후보를 차지했을 때 장면 전체가 그 방향이 아니면 보정을 줄이는 안전장치입니다.</p>
+<div class="mb">\[s = \mathrm{clip}\!\left(\frac{E}{2},\ 0,\ 1\right) \cdot \mathrm{agree}\big(g,\ p_0 + p_b\big),\qquad
+\mathrm{agree}(g, c) =
+\begin{cases}
+1 &amp; \lvert c\rvert &lt; 0.02 \\
+0 &amp; g\,c \le 0 \\
+\min\!\left(1,\ \dfrac{g}{0.5\,c}\right) &amp; \text{그 밖}
+\end{cases}\]</div>
+<p>상수 항에는 0.03스톱의 소프트 문턱 <span class="mi">\(p_0 \leftarrow \mathrm{sign}(p_0) \max(\lvert p_0\rvert - 0.03,\ 0)\)</span> 를 둡니다(큰 면이 기준 회색과 조금 어긋나 있을 때의 과보정을 막는 보험). 신뢰를 곱한 값을 <span class="mi">\(\tau(z) = s_\tau \big(p^\tau_0 + p^\tau_b B(z)\big)\)</span>, <span class="mi">\(\mu(z) = s_\mu \big(p^\mu_0 + p^\mu_b B(z)\big)\)</span> 라 하고, <span class="mi">\(s\)</span> 의 일치 검사에는 문턱을 두기 전의 <span class="mi">\(p_0\)</span> 를 씁니다. 가운데 값 <span class="mi">\(\tau_{\mathrm{mid}} = \mathrm{clip}\big(\tau(0),\ \pm 0.5\big)\)</span> 이 따뜻한 쪽이면 일부를 남깁니다.</p>
 <div class="mb">\[a =
 \begin{cases}
-\min\!\big(0.4,\ 0.4\,(\tau(0) - 0.2)\big) &amp; \tau(0) &gt; 0.2 \\
--\min\!\big(0.1,\ 0.1\,(-\tau(0) - 0.2)\big) &amp; \tau(0) &lt; -0.2 \\
+\min\!\big(0.4,\ 0.4\,(\tau_{\mathrm{mid}} - 0.2)\big) &amp; \tau_{\mathrm{mid}} &gt; 0.2 \\
+-\min\!\big(0.1,\ 0.1\,(-\tau_{\mathrm{mid}} - 0.2)\big) &amp; \tau_{\mathrm{mid}} &lt; -0.2 \\
 0 &amp; \text{그 밖}
 \end{cases}\]</div>
-<div class="mb">\[o(z) = \left(\tau' + \tfrac{\mu}{3},\ -\tfrac{2\mu}{3},\ -\tau' + \tfrac{\mu}{3}\right),\quad \tau' = \tau(z) - a,
+<div class="mb">\[o(z) = \left(\tau' + \tfrac{\mu'}{3},\ -\tfrac{2\mu'}{3},\ -\tau' + \tfrac{\mu'}{3}\right),\quad \tau' = \mathrm{clip}\big(\tau(z) - a,\ \pm 0.5\big),\quad \mu' = \mathrm{clip}\big(\mu(z),\ \pm 0.35\big),
 \qquad \tilde\ell_c = \ell_c - o_c\!\left(\frac{\ell_c - m}{s}\right)\]</div>
-<p><span class="mi">\(m, s\)</span> 는 <span class="mi">\([q_1, q_{99}]\)</span> 의 가운데와 폭입니다. 보정량은 1,024칸 표로 두고, 채널 LUT에서는 그 채널 자신의 로그값으로 표를 찾습니다. 무채색에서는 세 채널의 로그값이 같으므로 정확하고, 유채색에서는 채널마다 조금 다른 밝기의 보정을 받지만 함수가 매끄러워 차이는 작습니다.</p>
+<p><span class="mi">\(m, s\)</span> 는 <span class="mi">\([q_1, q_{99}]\)</span> 의 가운데와 폭(<span class="mi">\(\Delta\)</span>)입니다. 보정량은 <span class="mi">\(z \in [-\tfrac12, \tfrac12]\)</span> 를 1,024칸으로 나눈 표로 두고(가장 가까운 칸, 범위 밖은 양 끝 칸),  채널 LUT에서는 그 채널 자신의 로그값으로 표를 찾습니다. 무채색에서는 세 채널의 로그값이 같으므로 정확하고, 유채색에서는 채널마다 조금 다른 밝기의 보정을 받지만 함수가 매끄러워 차이는 작습니다.</p>
 <p><strong>⑤ 측광과 장면 키.</strong> 휘도 로그 <span class="mi">\(L_i = \log_2 \sum_c w_c 2^{\tilde\ell_{c,i}}\)</span> 의 분위수를 <span class="mi">\(l_{lo} = q_{0.5}\)</span>, <span class="mi">\(l_{hi} = q_{99.5}\)</span>, 중앙값을 <span class="mi">\(l_{med}\)</span> 라 하고, <span class="mi">\(DR = l_{hi} - l_{lo}\)</span> 입니다.</p>
 <div class="mb">\[\bar\ell = \frac{\sum_i \omega_i L_i}{\sum_i \omega_i},\qquad
 \omega_i = \left(0.25 + 0.75\, e^{-\frac{\Delta x_i^2}{2(0.33W)^2} - \frac{\Delta y_i^2}{2(0.33H)^2}}\right) h_i\]</div>
@@ -744,7 +792,7 @@ m = \frac{\tfrac12 o_R - o_G + \tfrac12 o_B}{1.5}\]</div>
 \max\!\big(0.35,\ 1 - 0.3\,(L_i - l_{med} - 1)\big) &amp; L_i &gt; l_{med} + 1 \\
 1 &amp; \text{그 밖}
 \end{cases}\]</div>
-<p>평균은 1~99% 분위 안의 픽셀로만 냅니다. 중앙을 더 보고, 중앙값보다 한 스톱 넘게 밝은 곳(하늘)은 스톱마다 가볍게 봅니다.</p>
+<p>평균은 1~99% 분위 안의 픽셀로만 냅니다. 중앙을 더 보고, 중앙값보다 한 스톱 넘게 밝은 곳(하늘)은 스톱마다 가볍게 봅니다. <span class="mi">\(\Delta x_i, \Delta y_i\)</span> 는 분석 영역 가운데로부터의 거리, <span class="mi">\(W, H\)</span> 는 분석 영역의 너비와 높이(지도 픽셀)입니다. 평균을 낼 픽셀이 없으면 <span class="mi">\(\bar\ell = (l_{lo} + l_{hi})/2\)</span> 입니다.</p>
 <div class="mb">\[f = \mathrm{clip}\left(\frac{2\bar\ell - l_{lo} - l_{hi}}{\max(DR, 4)},\ -0.8,\ 0.8\right),\qquad
 f_d = \mathrm{dz}(f, 0.12)\]</div>
 <div class="mb">\[Y_{\mathrm{key}} = \mathrm{clip}\left(0.26 \cdot 4^{\,e(f_d)},\ 0.02,\ 0.52\right),\qquad
@@ -763,31 +811,53 @@ T(u) = \frac{W}{1 + e^{-\mathcal L(\ln u)}}\]</div>
 <div class="mb">\[v_{lo} = (l_{lo} - \bar\ell)\ln 2,\quad v_{hi} = (l_{hi} - \bar\ell)\ln 2,\qquad
 b_T = 0.004 \cdot 2^{\,0.7\,\mathrm{clip}(6 - DR,\ 0,\ 4.5)}\]</div>
 <p>하한은 카메라 곡선처럼 중간 톤 대비를 보장합니다. 명암 범위가 아주 넓은 장면에서도 곡선을 늘어뜨려 전부 담지 않고 양 끝을 잘라 내며, 그런 장면의 그림자 세부는 ⑩의 큰 명암 차 압축이 일부 살립니다. 밝은 쪽 상한이 그림자 쪽보다 높은 이유는 디지털카메라 곡선이 중간 톤 위쪽에서 가파르고 흰색 근처에서 어깨를 만들기 때문입니다. 두 쪽 상한이 같았을 때(1.7)는 명암 범위가 5스톱 안팎인 보통 장면에서 흰 물체(하늘보다 어두운 흰 기둥, 컬러 체커의 흰 패치)가 L* 82~89의 밝은 회색에 머물러 물 빠진 듯 보였습니다(4-4).</p>
-<p><span class="mi">\(v_{lo}\)</span> 는 −0.5 이하, <span class="mi">\(v_{hi}\)</span> 는 0.3 이상으로 제한합니다. 명암 범위가 6스톱보다 좁을수록 검은점 목표 <span class="mi">\(b_T\)</span> 를 스톱마다 <span class="mi">\(2^{0.7}\)</span> 배 덜 깊게 잡아, 안개처럼 정말 흐린 장면을 억지로 늘려 그림자 색이 묻히지 않게 합니다. 기준은 v2.6까지 8스톱이었는데, 실제 네거티브는 필름의 발(toe, 노출이 적은 곳에서 농도가 거의 늘지 않는 구간)과 스캔이 그림자를 눌러 담아 맑은 날 장면도 범위가 5스톱 남짓으로 잡힙니다. 그래서 실제 스캔의 그림자가 L* 12에 떠 옅어 보여(4-6의 '실제 스캔 예시') 6스톱으로 낮췄습니다. 합성 장면은 발이 거의 없어 이 차이가 드러나지 않았습니다. 한쪽 기울기가 범위를 넘으면 그 값에 묶고 다른 쪽을 자기 목표에 다시 맞춥니다.</p>
+<p><span class="mi">\(v_{lo}\)</span> 는 −0.5 이하, <span class="mi">\(v_{hi}\)</span> 는 0.3 이상으로 제한합니다. 연립이 풀리지 않으면(행렬식이 0에 가까움) 1.5를 씁니다. 명암 범위가 6스톱보다 좁을수록 검은점 목표 <span class="mi">\(b_T\)</span> 를 스톱마다 <span class="mi">\(2^{0.7}\)</span> 배 덜 깊게 잡아, 안개처럼 정말 흐린 장면을 억지로 늘려 그림자 색이 묻히지 않게 합니다. 기준은 v2.6까지 8스톱이었는데, 실제 네거티브는 필름의 발(toe, 노출이 적은 곳에서 농도가 거의 늘지 않는 구간)과 스캔이 그림자를 눌러 담아 맑은 날 장면도 범위가 5스톱 남짓으로 잡힙니다. 그래서 실제 스캔의 그림자가 L* 12에 떠 옅어 보여(4-6의 '실제 스캔 예시') 6스톱으로 낮췄습니다. 합성 장면은 발이 거의 없어 이 차이가 드러나지 않았습니다. 한쪽 기울기가 범위를 넘으면 그 값에 묶고 다른 쪽을 자기 목표에 다시 맞춥니다.</p>
+<p>대비 슬라이더는 <span class="mi">\(n_s, n_h\)</span> 에 곱하고, 블랙 포인트 슬라이더 <span class="mi">\(p_b\)</span> 는 그림자 쪽 항에만 배율 <span class="mi">\(b_f\)</span> 를 겁니다. 배율은 키 근처에서 <span class="mi">\(\sigma(-v/\kappa)\)</span> 로 부드럽게 1로 이어져, 키(<span class="mi">\(v = 0\)</span>)는 그대로이고 곡선에 꺾임이 없으며 키 위로는 영향이 빠르게 사라집니다.</p>
+<div class="mb">\[\mathcal L_b(v) = \mathrm{logit}(Y_{\mathrm{key}}) + n_s\big(v - g(v)\big)\left(1 + \frac{b_f - 1}{1 + e^{\,v/\kappa}}\right) + n_h\, g(v),\qquad
+b_f =
+\begin{cases}
+2^{1.5\,p_b} &amp; p_b \ge 0 \\
+2^{2.5\,p_b} &amp; p_b &lt; 0
+\end{cases}\]</div>
 <p><strong>⑦ 베일 빼기(안개 걷기).</strong> 기울기를 최대로 해도 그림자가 <span class="mi">\(b_T\)</span> 에 닿지 않으면, 곡선이 <span class="mi">\(b_T\)</span> 를 내는 입력 <span class="mi">\(x_b\)</span> 를 이분법으로 찾아 선형 베일 <span class="mi">\(\beta\)</span> 를 뺍니다.</p>
 <div class="mb">\[\mathcal L(\ln x_b) = \mathrm{logit}(b_T),\qquad
 \beta = \mathrm{clip}\left(0.6\,\frac{x_{lo} - x_b}{1 - x_b},\ 0,\ \min(0.6,\ 0.8\,x_{lo})\right),\qquad
 u' = \frac{u - \beta}{1 - \beta}\]</div>
-<p><span class="mi">\(x_{lo} = 2^{\,l_{lo} - \bar\ell}\)</span> 이며, 기울기와 <span class="mi">\(\beta\)</span> 를 번갈아 4번 다시 풉니다.</p>
-<p><strong>⑧ 채널 비 보존 적용과 색역 압축.</strong> 채널별 표(LUT)에는 화이트밸런스, 노출, 베일까지 넣은 <span class="mi">\(u'_c\)</span> 를 담습니다. 곡선은 픽셀에서 휘도에 겁니다.</p>
+<p><span class="mi">\(x_{lo} = 2^{\,l_{lo} - \bar\ell}\)</span> 이며, 기울기와 <span class="mi">\(\beta\)</span> 를 번갈아 4번 다시 풉니다. 기울기를 풀 때 <span class="mi">\(v_{lo}, v_{hi}\)</span> 는 베일을 뺀 <span class="mi">\(\ln\big((x - \beta)/(1 - \beta)\big)\)</span> 로 다시 잽니다. 베일 없이도 <span class="mi">\(\mathcal L(\ln x_{lo}) \le \mathrm{logit}(b_T) + 0.05\)</span> 이면 <span class="mi">\(\beta = 0\)</span> 으로 두고 멈춥니다. 이분법은 <span class="mi">\(\ln x_b \in [-30, 0]\)</span> 에서 50번 나눕니다.</p>
+<p><strong>⑧ 채널 비 보존 적용과 색역 압축.</strong> 채널별 표(LUT)에는 화이트밸런스, 노출, 베일까지 넣은 <span class="mi">\(u'_c\)</span> 를 담습니다. 노출 <span class="mi">\(E\)</span>, 색온도 <span class="mi">\(t\)</span>, 색조 <span class="mi">\(m\)</span> 슬라이더는 여기서 기존 방식과 같은 축 <span class="mi">\(k\)</span> 로 더해집니다(모두 0이면 Ai+ 결과 그대로).</p>
+<div class="mb">\[u'_c = \max\!\left(0,\ \frac{2^{\,\tilde\ell_c + k_c + E - \bar\ell} - \beta}{1 - \beta}\right),\qquad
+k = \left(t + \tfrac{m}{2},\ -m,\ -t + \tfrac{m}{2}\right)\]</div>
+<p>곡선은 픽셀에서 휘도에 겁니다.</p>
 <div class="mb">\[Y_u = \sum_c w_c\, u'_c,\qquad t = T(Y_u),\qquad \hat c = u'_c \cdot \frac{t}{Y_u}\]</div>
 <div class="mb">\[\max_c \hat c &gt; 1 \ \Rightarrow\ \hat c \leftarrow (1 - \kappa)\left[t + (\hat c - t)\,\frac{1 - t}{\max_k \hat c_k - t}\right] + \kappa\,\frac{\hat c}{\max_k \hat c_k},\qquad
 \kappa = 0.5\ \mathrm{clip}\!\left(\frac{0.9 - t}{0.3},\ 0,\ 1\right)\]</div>
-<p>앞 항은 휘도를 정확히 <span class="mi">\(t\)</span> 로 지키며 회색 쪽으로 당기고, 뒤 항은 채널 비(색도)를 지키며 전체를 낮춥니다. v2.6까지는 앞 항만 써서 밝은 파란 하늘처럼 한 채널이 넘치는 색이 허옇게 바랬습니다(실제 스캔의 하늘 C<em> 27). 둘을 반씩 섞으면 하늘은 조금 어두워지는 대신 색이 남습니다(C</em> 36). 흰색에 가까운 곳(<span class="mi">\(t \ge 0.9\)</span>)은 앞 항만 써서, 잘린 하이라이트나 필름 밖으로 새는 빛이 색을 띠지 않고 카메라처럼 흰색으로 날아가게 합니다. <span class="mi">\(T\)</span> 는 옥타브마다 256칸인 표로 두고, 픽셀에서는 <code>float</code> 비트의 지수·가수로 칸을 바로 찾습니다(로그 계산 없음).</p>
-<p><strong>⑨ 채도 평준화와 바이브런스.</strong> 분석 지도에 ⑧까지를 흉내 내어 Lab 채도의 75% 분위 <span class="mi">\(C^*_{75}\)</span> 를 잽니다. 이때 아주 어둡거나(<span class="mi">\(Y &lt; 0.01\)</span>) 잘린 곳(<span class="mi">\(\max &gt; 0.97\)</span>)은 뺍니다.</p>
+<p><span class="mi">\(Y_u \le 0\)</span> 이면 검정, <span class="mi">\(t \ge 1\)</span> 이면 흰색 <span class="mi">\((1, 1, 1)\)</span> 입니다. 앞 항은 휘도를 정확히 <span class="mi">\(t\)</span> 로 지키며 회색 쪽으로 당기고, 뒤 항은 채널 비(색도)를 지키며 전체를 낮춥니다. v2.6까지는 앞 항만 써서 밝은 파란 하늘처럼 한 채널이 넘치는 색이 허옇게 바랬습니다(실제 스캔의 하늘 C<em> 27). 둘을 반씩 섞으면 하늘은 조금 어두워지는 대신 색이 남습니다(C</em> 36). 흰색에 가까운 곳(<span class="mi">\(t \ge 0.9\)</span>)은 앞 항만 써서, 잘린 하이라이트나 필름 밖으로 새는 빛이 색을 띠지 않고 카메라처럼 흰색으로 날아가게 합니다. <span class="mi">\(T\)</span> 는 옥타브마다 256칸인 표로 두고, 픽셀에서는 <code>float</code> 비트의 지수·가수로 칸을 바로 찾습니다(로그 계산 없음). <span class="mi">\(Y_u = 2^{n}(1 + \phi)\)</span>, <span class="mi">\(0 \le \phi &lt; 1\)</span> 로 쓰면 다음과 같고, 표는 <span class="mi">\(2^{-30}\)</span> 부터 <span class="mi">\(2^{12}\)</span> 까지이며 그 밖은 양 끝 값입니다.</p>
+<div class="mb">\[j = 256\,(n + 30) + \lfloor 256\,\phi \rfloor,\qquad
+t = T_j + \big(T_{j+1} - T_j\big)\big(256\,\phi - \lfloor 256\,\phi \rfloor\big),\qquad
+T_j = T\!\left(2^{\lfloor j/256 \rfloor - 30}\left(1 + \tfrac{j \bmod 256}{256}\right)\right)\]</div>
+<p><strong>⑨ 채도 평준화와 바이브런스.</strong> 분석 지도에 ⑧까지를 흉내 내어 Lab 채도의 75% 분위 <span class="mi">\(C^*_{75}\)</span> 를 잽니다. 이때 아주 어둡거나(<span class="mi">\(Y &lt; 0.01\)</span>) 잘린 곳(<span class="mi">\(\max &gt; 0.97\)</span>)은 뺍니다. 분석 픽셀을 셋에 하나씩 쓰고, Lab은 선형 sRGB에서 D65 기준으로 구하되 어두운 쪽 직선 구간 없이 세제곱근만 씁니다.</p>
+<div class="mb">\[X = 0.4124\,r + 0.3576\,g + 0.1805\,b,\qquad Y = \textstyle\sum_c w_c\, c,\qquad Z = 0.0193\,r + 0.1192\,g + 0.9505\,b\]</div>
+<div class="mb">\[a^* = 500\left(\sqrt[3]{X / 0.95047} - \sqrt[3]{Y}\right),\qquad
+b^* = 200\left(\sqrt[3]{Y} - \sqrt[3]{Z / 1.08883}\right),\qquad
+C^* = \sqrt{a^{*2} + b^{*2}}\]</div>
+<p>분위수는 0…150을 1,500칸으로 나눈 히스토그램에서 구하고, 남은 표본이 50개 이하이거나 <span class="mi">\(C^*_{75} &lt; 3\)</span> 이면 <span class="mi">\(\sigma = 1.05\)</span> 로 둡니다.</p>
 <div class="mb">\[\sigma = \mathrm{clip}\left(\sqrt{30 / C^*_{75}},\ 1.0,\ s_{\max}\right),\qquad s_{\max} = 1.3 + 0.1\ \mathrm{clip}\!\left(\frac{DR - 1.5}{4.5},\ 0,\ 1\right)\]</div>
 <p>픽셀마다 HSV 채도 <span class="mi">\(s = (\max - \min)/\max\)</span> 와 피부 가중치 <span class="mi">\(k_s\)</span> 로 배율을 정합니다. <span class="mi">\(R \ge G \ge B\)</span>, <span class="mi">\(0.1 &lt; s &lt; 0.75\)</span>, 색상 <span class="mi">\(h = (G - B)/(R - B) \in (0.13, 0.75)\)</span> 일 때 <span class="mi">\(k_s = 1 - \lvert h - 0.44\rvert / 0.31\)</span> 이고, 그 밖은 0입니다.</p>
 <div class="mb">\[F = \big(1 + 0.25\,(1 - s)^2 (1 - 0.7 k_s)\big)\,\big(1 + (\sigma s_u - 1)(1 - 0.6 k_s)\big)\]</div>
 <p><span class="mi">\(s_u\)</span> 는 채도 슬라이더입니다. 거의 회색인 픽셀의 잔여 색을 키우지 않도록, 올리는 쪽(<span class="mi">\(F &gt; 1\)</span>)에만 무채색 보호를 겁니다.</p>
 <div class="mb">\[F \leftarrow 1 + (F - 1)\,\mathrm{smoothstep}\left(\frac{s - 0.05}{0.13}\right)\]</div>
-<p>적용은 <span class="mi">\(c \leftarrow Y + F (c - Y)\)</span> 이며, 어느 채널이 <span class="mi">\([0, 1]\)</span> 을 벗어나면 벗어나지 않는 가장 큰 <span class="mi">\(F\)</span> 로 줄입니다.</p>
-<p><strong>⑩ 국소 대비(맑게)와 명암 압축.</strong> 분석 지도에서 출력 휘도의 로그 <span class="mi">\(\ell_o\)</span> 를 가이디드 필터(반경은 지도 긴 변의 2.5%, <span class="mi">\(\epsilon = 0.1\)</span>)로 거른 큰 구조를 <span class="mi">\(B\)</span> 라 합니다.</p>
+<p>적용은 <span class="mi">\(c \leftarrow Y + F (c - Y)\)</span> 이며(세 채널이 같으면 건너뜀), 어느 채널이 <span class="mi">\([0, 1]\)</span> 을 벗어나면 벗어나지 않는 가장 큰 <span class="mi">\(F\)</span> 로 줄입니다.</p>
+<div class="mb">\[F \leftarrow \max\!\left(0,\ \min\!\Big(F,\ \min_{c:\,c &gt; Y} \frac{1 - Y}{c - Y},\ \min_{c:\,c &lt; Y} \frac{Y}{Y - c}\Big)\right)\]</div>
+<p><strong>⑩ 국소 대비(맑게)와 명암 압축.</strong> 분석 지도에서 출력 휘도의 로그 <span class="mi">\(\ell_o = \log_2 \max(Y_o, 10^{-4})\)</span> 를 가이디드 필터(반경은 지도 긴 변의 2.5%, 최소 2, <span class="mi">\(\epsilon = 0.1\)</span>)로 거른 큰 구조를 <span class="mi">\(B\)</span> 라 합니다.</p>
 <div class="mb">\[\Delta = \mathrm{clip}\Big(0.3\,(\ell_o - B) - c_b\,\big(B - \log_2 Y_{\mathrm{key}}\big),\ -1,\ 1\Big),\qquad
 c_b = 0.2\,\mathrm{clip}\left(\frac{DR - 7}{5},\ 0,\ 1\right)\]</div>
-<p>픽셀에서는 <span class="mi">\(\Delta\)</span> 를 쌍선형 보간하고, sRGB 부호화된 휘도 <span class="mi">\(y'\)</span> 로 양 끝을 약하게 해 배율 <span class="mi">\(2^{\Delta \cdot \min(1,\ 5.2\, y'(1 - y'))}\)</span> 를 곱합니다(가장 밝은 채널이 1을 넘지 않게 제한). 가이디드 필터는 가장자리를 지키므로 후광이 생기지 않습니다.</p>
+<p>픽셀에서는 <span class="mi">\(\Delta\)</span> 를 쌍선형 보간하고, sRGB 부호화된 휘도 <span class="mi">\(y'\)</span> 로 양 끝을 약하게 해 배율을 곱합니다(가장 밝은 채널이 1을 넘지 않게 제한). 가이디드 필터는 가장자리를 지키므로 후광이 생기지 않습니다.</p>
+<div class="mb">\[c \leftarrow c \cdot \min\!\left(2^{\,\Delta \cdot w},\ \frac{1}{\max_k c_k}\right),\qquad
+w = \min\!\big(1,\ 5.2\, y'(1 - y')\big),\qquad y' = \mathrm{enc}(Y)\]</div>
+<p>지수 <span class="mi">\(\Delta \cdot w\)</span> 는 1/1024 단위로 반올림해 표에서 찾고, <span class="mi">\(\lvert \Delta\rvert \le 10^{-4}\)</span> 이면 건너뜁니다. 지도 좌표는 칸 가운데 기준 <span class="mi">\(x_m = (x + 0.5)\, m_w / W - 0.5\)</span> (세로도 같음, 가장자리에서 자름)이고, <span class="mi">\(m_w\)</span> 는 지도 너비, <span class="mi">\(W\)</span> 는 원본 너비입니다. 마지막에 세 채널을 <span class="mi">\([0, 1]\)</span> 로 자르고 sRGB로 부호화합니다.</p>
 <p><strong>⑪ 그레인 측정.</strong> 원본 해상도의 가운데와 네 사분면 중심에서 256×256 블록 다섯 개를 ⑧~⑩까지 처리한 뒤, 부호화된 <span class="mi">\(Y'\)</span>, <span class="mi">\(U = B' - Y'\)</span>, <span class="mi">\(V = R' - Y'\)</span> 각각에 대해 16×16 타일마다 5×5 평균을 뺀 나머지의 표준편차를 잽니다.</p>
 <div class="mb">\[\hat\sigma_{\mathrm{tile}} = \sqrt{\frac{\mathrm{var}\big(I - \overline{I}^{\,5\times5}\big)}{1 - 1/25}}\]</div>
-<p>독립 잡음이면 <span class="mi">\(\mathrm{var}(I - \overline I^{\,5\times5}) = \sigma^2 (1 - 1/25)\)</span> 입니다. 5×5 고역이라 알갱이가 몇 픽셀로 뭉친 실제 필름 그레인도 그 크기까지 셉니다. 처음 썼던 라플라시안 MAD는 픽셀 단위 잡음만 세어, 뭉친 그레인을 크게 과소평가하고 잡음 줄이기가 거의 걸리지 않게 했습니다(4-4). 다섯 블록 전체 타일 값의 25% 분위(평탄한 쪽)를 <span class="mi">\(\sigma_Y\)</span>, 그리고 <span class="mi">\(\sigma_C = \max(\sigma_U, \sigma_V)\)</span> 로 씁니다.</p>
+<p>독립 잡음이면 <span class="mi">\(\mathrm{var}(I - \overline I^{\,5\times5}) = \sigma^2 (1 - 1/25)\)</span> 입니다. 5×5 고역이라 알갱이가 몇 픽셀로 뭉친 실제 필름 그레인도 그 크기까지 셉니다. 처음 썼던 라플라시안 MAD는 픽셀 단위 잡음만 세어, 뭉친 그레인을 크게 과소평가하고 잡음 줄이기가 거의 걸리지 않게 했습니다(4-4). 다섯 블록 전체 타일 값의 25% 분위(평탄한 쪽, 정렬한 값의 <span class="mi">\(\lfloor 0.25\,n \rfloor\)</span> 번째)를 <span class="mi">\(\sigma_Y\)</span>, 그리고 <span class="mi">\(\sigma_C = \max(\sigma_U, \sigma_V)\)</span> 로 씁니다. 블록 크기는 <span class="mi">\(b_w = \min(256, W)\)</span>, <span class="mi">\(b_h = \min(256, H)\)</span> 이고(어느 쪽이든 40px보다 작으면 재지 않음), 블록의 왼쪽 위는 <span class="mi">\(x_0 = \mathrm{clip}\big(\mathrm{round}(c_x W - b_w/2),\ 0,\ W - b_w\big)\)</span> (<span class="mi">\(c_x \in \{0.5, 0.25, 0.75, 0.25, 0.75\}\)</span>, <span class="mi">\(c_y \in \{0.5, 0.25, 0.25, 0.75, 0.75\}\)</span>, 세로도 같음)입니다. 타일은 블록 가장자리 2px를 남기고 16px 간격으로 놓습니다.</p>
 <p><strong>⑫ 잡음 줄이기.</strong> 가이디드 필터(He 등)는 창 <span class="mi">\(k\)</span> 마다 다음을 구해, 출력을 <span class="mi">\(\hat p = \bar a\, I + \bar b\)</span> 로 만듭니다.</p>
 <div class="mb">\[a_k = \frac{\mathrm{cov}_k(I, p)}{\mathrm{var}_k(I) + \epsilon},\qquad b_k = \bar p_k - a_k \bar I_k\]</div>
 <p>밝기는 자기 자신을 안내 영상으로(<span class="mi">\(I = p = Y'\)</span>) 반경 2, <span class="mi">\(\epsilon_Y = (2.2\sigma_Y)^2\)</span> 로 거른 뒤 75%만 섞습니다. 디지털 사진처럼 평탄한 면을 매끈하게 하되, 그레인을 다 지우면 밀랍처럼 보이므로 4분의 1은 남깁니다. 반경이 1이면 창이 뭉친 그레인보다 작아 분산을 잡음이 아닌 결로 재고 거의 줄이지 못했습니다.</p>
@@ -796,9 +866,55 @@ c_b = 0.2\,\mathrm{clip}\left(\frac{DR - 7}{5},\ 0,\ 1\right)\]</div>
 <div class="mb">\[\hat U = \bar a_U\, Y' + \bar b_U,\quad \hat V = \bar a_V\, Y' + \bar b_V,\qquad
 R' = Y'_f + \hat V,\quad B' = Y'_f + \hat U,\quad G' = \frac{Y'_f - 0.2126 R' - 0.0722 B'}{0.7152}\]</div>
 <p>그레인이 8비트 한 단계 안팎으로 보이지 않을 만큼 작으면(<span class="mi">\(\sigma_Y \le 0.004\)</span>, <span class="mi">\(\sigma_C \le 0.003\)</span>) 그 단계는 건너뜁니다. 미리보기 배율이 0.6보다 작으면 축소로 그레인이 이미 평균되므로 생략합니다.</p>
+<p>위의 반경과 문턱은 원본 해상도 기준입니다. 화면 배율 <span class="mi">\(s\)</span> (미리보기 너비 / 원본 너비, 저장과 확대경은 1)에서는 다음을 씁니다.</p>
+<div class="mb">\[k = \min(1, s),\quad r_Y = \max\big(1, \mathrm{round}(2s)\big),\quad r_C = \max\big(1, \mathrm{round}(3s)\big),\quad
+\epsilon_Y = (2.2\,k\,\sigma_Y)^2 + 10^{-7},\quad \epsilon_C = (2.5\,k\,\sigma_C)^2 + 10^{-7}\]</div>
+<p>반해상도의 반경은 <span class="mi">\(\max\big(1, \mathrm{round}(r_C/2)\big)\)</span> 이고, 밝기·색 단계는 각각 <span class="mi">\(k\sigma_Y &gt; 0.004\)</span>, <span class="mi">\(k\sigma_C &gt; 0.003\)</span> 일 때만 합니다. 반해상도 칸 <span class="mi">\(j\)</span> 의 가운데는 원해상도 <span class="mi">\(2j + 0.5\)</span> 이므로 계수는 <span class="mi">\(f = (x + 0.5)/2 - 0.5\)</span> 에서 보간합니다(가장자리에서 자름). 색 단계를 건너뛸 때는 <span class="mi">\(U, V\)</span> 를 그대로 두고 밝기만 바꿔 다시 합칩니다. 다시 합친 <span class="mi">\(R', G', B'\)</span> 는 <span class="mi">\([0, 1]\)</span> 로 자릅니다.</p>
 <p><strong>⑬ 선명화.</strong> 양은 <span class="mi">\(1.5 a\)</span> 입니다. 문턱은 잡음 줄이기 뒤 남은 밝기 잡음의 두 배 아래를 거의 키우지 않도록 올립니다.</p>
-<div class="mb">\[\theta_{\mathrm{Ai}} = \max\!\big(\theta,\ 2\,\sigma_Y (1 - 0.5 \times 0.75)\big)\]</div>
-<p>밝기 잡음 줄이기를 건너뛴 경우에는 <span class="mi">\(\max(\theta, 2\sigma_Y)\)</span> 입니다.</p>
+<div class="mb">\[\theta_{\mathrm{Ai}} = \max\!\big(\theta,\ 2\,k\,\sigma_Y (1 - 0.5 \times 0.75)\big)\]</div>
+<p>밝기 잡음 줄이기를 건너뛴 경우에는 <span class="mi">\(\max(\theta, 2k\sigma_Y)\)</span> 입니다. <span class="mi">\(k\)</span> 는 ⑫의 화면 배율 항입니다. 기존 방식처럼 <span class="mi">\(\sigma &lt; 0.35\)</span> 이면 선명화를 하지 않습니다.</p>
+<p><strong>⑭ 보정 설명의 조건.</strong> 패널의 보정 설명은 다음 조건에서만 보입니다. '밝기 ±xEV'는 같은 계측 지점에서 Ai+가 내는 밝기와 기존 방식(슬라이더 중립)이 내는 밝기의 차입니다.</p>
+<div class="mb">\[\Delta EV = \log_2 \frac{Y_{\mathrm{key}}}{y_{\mathrm{cl}}\!\left(1 + \bar\ell / S\right)},\qquad
+y_{\mathrm{cl}}(x) = \max\!\left(\frac{R(x) - R(0)}{R(1) - R(0)},\ 10^{-4}\right)\ \ (g = 5)\]</div>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>설명</th>
+<th>조건</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>화밸 보정</td>
+<td>표 전체에서 <span class="mi">\(\max \lvert o_c\rvert &gt; 0.04\)</span>. 괄호 안은 색온도 <span class="mi">\(-(\tau_{\mathrm{mid}} - a)\)</span>, 색조 <span class="mi">\(-\tfrac{2}{3}\mu_{\mathrm{mid}}\)</span> 상당(각각 0.02 이상일 때), <span class="mi">\(a &gt; 0.05\)</span> 이면 '따뜻함 일부 유지'</td>
+</tr>
+<tr>
+<td>밝기 ±xEV</td>
+<td><span class="mi">\(\lvert \Delta EV\rvert \ge 0.15\)</span></td>
+</tr>
+<tr>
+<td>밝은 장면 유지 / 어두운 장면 유지</td>
+<td><span class="mi">\(f_d &gt; 0.2\)</span> / <span class="mi">\(f_d &lt; -0.2\)</span></td>
+</tr>
+<tr>
+<td>안개 걷기</td>
+<td><span class="mi">\(\beta &gt; 0.1\)</span></td>
+</tr>
+<tr>
+<td>명암 압축</td>
+<td><span class="mi">\(DR &gt; 9\)</span></td>
+</tr>
+<tr>
+<td>채도 ±x%</td>
+<td><span class="mi">\(\sigma \ge 1.04\)</span> 또는 <span class="mi">\(\sigma \le 0.96\)</span></td>
+</tr>
+<tr>
+<td>그레인 줄임</td>
+<td><span class="mi">\(\sigma_Y &gt; 0.004\)</span> 또는 <span class="mi">\(\sigma_C &gt; 0.003\)</span></td>
+</tr>
+</tbody>
+</table></div>
+<p><span class="mi">\(\mu_{\mathrm{mid}} = \mathrm{clip}\big(\mu(0),\ \pm 0.35\big)\)</span> 입니다. 화밸 표의 최댓값은 8칸마다 하나씩 보고 잽니다.</p>
 <h3 id="s4-2">4-2. 물리 세계</h3>
 <p>이 도구가 되돌리는 것은 다음 사슬입니다.</p>
 <figure class="chain" aria-label="물리 사슬">
@@ -1719,7 +1835,7 @@ R' = Y'_f + \hat V,\quad B' = Y'_f + \hat U,\quad G' = \frac{Y'_f - 0.2126 R' - 
 </dl>
 </section>
 
-      <div class="foot">이 도움말은 Posity v2.11.3 기준입니다. 버전별로 바뀐 점은 <a href="https://github.com/Velvitty/Scanner#12-변경-기록">변경 기록</a>에 있습니다.</div>
+      <div class="foot">이 도움말은 Posity v2.11.4 기준입니다. 버전별로 바뀐 점은 <a href="https://github.com/Velvitty/Scanner#12-변경-기록">변경 기록</a>에 있습니다.</div>
     </div>
   </main>
 </div>
