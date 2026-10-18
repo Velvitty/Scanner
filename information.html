@@ -282,13 +282,13 @@ figure{margin:0}
 <li><b>다듬습니다.</b> 자르기·회전과 오른쪽 패널의 슬라이더로 손봅니다. 설정은 프레임마다 따로 기억됩니다.</li>
 <li><b>저장합니다.</b> <span class="ui">내보내기</span>로 지금 사진을, <span class="ui">전체 ZIP</span>으로 모든 사진을 한 번에 저장합니다(<a href="#s1-5">1-5</a>).</li>
 </ol>
-<div class="note"><b>넣을 수 있는 파일</b> TIFF(8·16비트 정수, 32비트 부동소수 / 무압축·LZW·Deflate·PackBits / 줄 단위·타일, 채널 분리 저장 포함), JPEG, PNG, 그리고 브라우저가 여는 그 밖의 이미지(WebP 등). 한 장에 2억 화소까지 다룹니다. BigTIFF, YCbCr TIFF, 부동소수 예측자(Predictor 3)를 쓴 TIFF는 열지 못합니다.</div>
+<div class="note"><b>넣을 수 있는 파일</b> TIFF(8·16비트 정수, 32비트 부동소수 / 무압축·LZW·Deflate·PackBits / 줄 단위·타일, 채널 분리 저장 포함), JPEG, PNG(16비트는 16비트 그대로), 카메라로 찍은 DNG(무압축·무손실 JPEG·Deflate, 2×2 베이어 또는 선형), 그리고 브라우저가 여는 그 밖의 이미지(WebP 등). 다른 카메라 RAW는 Adobe DNG Converter로 DNG로 바꾸면 열 수 있습니다. 한 장에 2억 화소까지 다룹니다. BigTIFF, YCbCr TIFF, 부동소수 예측자(Predictor 3)를 쓴 TIFF는 열지 못합니다.</div>
 
 <h3 id="s1-2">1-2. 화면 구성</h3>
 <div class="tw"><table>
 <thead><tr><th>자리</th><th>무엇이 있나</th></tr></thead>
 <tbody>
-<tr><td>머리줄</td><td><span class="ui">스캔 열기</span>, 저장 형식(JPEG 8비트 · PNG 8비트 · PNG 16비트), JPEG 품질(JPEG일 때만), <span class="ui">내보내기</span>, <span class="ui">전체 ZIP</span>, <span class="ui">도움말</span>. 제목 앞의 작은 색 칩은 지금 프레임의 필름 베이스 색이고, 제목 옆에는 버전이 보입니다.</td></tr>
+<tr><td>머리줄</td><td><span class="ui">스캔 열기</span>, 저장 형식(JPEG 8비트 · PNG 8비트 · PNG 16비트 · TIFF 16비트), JPEG 품질(JPEG일 때만), <span class="ui">내보내기</span>, <span class="ui">전체 ZIP</span>, <span class="ui">도움말</span>. 제목 앞의 작은 색 칩은 지금 프레임의 필름 베이스 색이고, 제목 옆에는 버전이 보입니다.</td></tr>
 <tr><td>필름 띠 (왼쪽, 모바일에서는 위)</td><td>불러온 프레임의 썸네일. 누르면 그 프레임을 엽니다. 오른쪽 위 <span class="ui">×</span>는 목록에서 빼기이고, 알림의 <span class="ui">되돌리기</span>로 제자리에 되돌립니다. ‘변환 중…’은 썸네일을 만드는 중, ‘읽을 수 없음’은 열 수 없는 파일입니다(마우스를 올리면 이유가 보임).</td></tr>
 <tr><td>도구 막대</td><td><span class="ui">↺ 90°</span> <span class="ui">↻ 90°</span> 회전, <span class="ui">좌우 반전</span>, <span class="ui">자르기</span>(비율 고정·자동 맞춤·자르기 해제·완료), <span class="ui">베이스 찍기</span>, <span class="ui">회색 찍기</span>, <span class="ui">원본 보기</span>(누르고 있는 동안 네거티브), <span class="ui">1:1 확대경</span>.</td></tr>
 <tr><td>가운데 화면</td><td>변환 결과. 저장될 영역의 왼쪽 아래에 워터마크가 같은 자리에 보입니다. 아래 상태줄에 파일 정보와 지금 도구의 사용법이 나옵니다.</td></tr>
@@ -372,7 +372,7 @@ figure{margin:0}
 <dt>느리거나 ‘메모리가 부족’하다고 나와요</dt>
 <dd>다른 탭을 닫거나 해상도가 낮은 스캔으로 시도해 주세요. 화면은 긴 변 1800px 미리보기로 다루고, 저장할 때만 원본 해상도로 128행씩 처리합니다.</dd>
 <dt>새로고침하면 편집한 설정이 사라지나요?</dt>
-<dd>네. 프레임별 설정은 이 탭에만 있습니다. 편집한 프레임이 있을 때 새로고침하거나 창을 닫으면 브라우저가 한 번 묻습니다. Ai+ 켜짐, 저장 형식, JPEG 품질만 브라우저에 기억됩니다.</dd>
+<dd>아니요. 손본 프레임의 설정(방향, 기울기, 자르기 포함)은 이 브라우저에 기억되어, 새로고침하거나 같은 파일을 다시 넣으면 되살아납니다. 알림의 '처음부터'를 누르면 버리고 새로 시작합니다. 변환 결과는 저장해야만 남으므로, 손본 뒤 아직 내보내지 않은 프레임이 있으면 새로고침이나 창 닫기 전에 브라우저가 한 번 묻습니다. Ai+ 켜짐, 저장 형식, JPEG 품질도 기억됩니다.</dd>
 <dt>인터넷이 없어도 쓸 수 있나요?</dt>
 <dd>페이지를 한 번 받아 두면 됩니다. 글꼴만 받지 못해 화면과 워터마크가 시스템 글꼴로 바뀝니다.</dd>
 </dl>
@@ -414,7 +414,7 @@ figure{margin:0}
 <div class="fsplit"><div class="fb">화면 · 확대경 · 히스토그램</div><div class="fb">내보내기<small>JPEG · PNG8 · PNG16 · ZIP</small></div></div>
 </div></figure>
 <h3 id="s3-2">3-2. 불러오기</h3>
-<p>TIFF는 자체 디코더로 읽습니다. 8·16비트 정수와 32비트 실수, 무압축·LZW·Deflate·PackBits 압축, 스트립·타일 배치, 청크·플래너 배열을 지원합니다. JPEG와 PNG는 브라우저의 디코더로 읽으므로 8비트입니다. 모든 입력은 채널당 16비트 정수 배열로 통일합니다.</p>
+<p>TIFF는 자체 디코더로 읽습니다. 8·16비트 정수와 32비트 실수, 무압축·LZW·Deflate·PackBits 압축, 스트립·타일 배치, 청크·플래너 배열을 지원합니다. 16비트 PNG는 자체 디코더로 16비트 그대로 읽고(풀지 못하면 브라우저로 8비트), JPEG와 8비트 PNG는 브라우저의 디코더로 읽으므로 8비트입니다. DNG는 자체 디코더로 원시 데이터를 읽어 2×2 베이어를 디모자이크하고, 선형 인코딩으로 둡니다. TIFF·PNG의 ICC 프로필이나 gAMA가 있으면 그에 맞춰 스캔 인코딩을 자동으로 고릅니다. 모든 입력은 채널당 16비트 정수 배열로 통일합니다.</p>
 <div class="mb">\[v = 257\,v_8\ \ (\text{8비트}),\qquad
 v = \big\lfloor 65535\ \mathrm{clip}(f, 0, 1) + 0.5 \big\rfloor\ \ (\text{32비트 실수})\]</div>
 <p>8비트는 0이 0, 255가 65535가 되도록 늘립니다. TIFF의 수평 차분 예측자(Predictor 2)는 <span class="mi">\(v_i \leftarrow (v_i + v_{i-n}) \bmod 2^{b}\)</span> (<span class="mi">\(n\)</span> 은 픽셀당 표본 수, <span class="mi">\(b\)</span> 는 표본 비트 수)로 되돌리고, 0이 흰색인 흑백(WhiteIsZero)은 <span class="mi">\(v \leftarrow 65535 - v\)</span> 로 뒤집으며, 흑백은 세 채널에 같은 값을 넣습니다.</p>
@@ -497,13 +497,17 @@ f_q = \mathrm{clip}\!\left(\frac{N^* - \sum_{q' \text{ 먼저}} f_{q'}\, n_{q'}}
 <td>자체 인코더 (<code>CompressionStream</code>의 Deflate)</td>
 </tr>
 <tr>
+<td>TIFF (16비트)</td>
+<td>자체 인코더. PNG16과 같은 16비트 값, Deflate 압축과 수평 차분 예측, sRGB ICC 프로필</td>
+</tr>
+<tr>
 <td>전체 ZIP</td>
 <td>자체 ZIP 작성기(무압축 저장), 1.8GB마다 나눔. 취소하면 현재 프레임까지 마치고 그때까지의 ZIP을 저장</td>
 </tr>
 </tbody>
 </table></div>
 <p>저장 값은 부호화된 값 <span class="mi">\(c''\)</span> (0~1)에서 8비트가 <span class="mi">\(\mathrm{round}(255\,c'')\)</span> (정확히 가운데이면 짝수 쪽, 캔버스와 같은 규칙), 16비트가 <span class="mi">\(\lfloor 65535\,c'' + 0.5 \rfloor\)</span> 입니다. 화면 미리보기도 같은 8비트 규칙을 씁니다.</p>
-<p><strong>워터마크.</strong> 모든 저장 결과(JPEG, PNG8, PNG16, 전체 ZIP)의 왼쪽 아래에 두 줄로 새깁니다.</p>
+<p><strong>워터마크.</strong> 모든 저장 결과(JPEG, PNG8, PNG16, TIFF16, 전체 ZIP)의 왼쪽 아래에 두 줄로 새깁니다.</p>
 <pre><code>Scanned by Posity,
 -Programmed by Yeony
 </code></pre>
