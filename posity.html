@@ -2153,6 +2153,44 @@ function buildPipe(s, an, ai) {
 // 화이트밸런스 이전의 정규화 로그 노출 (회색 스포이트용)
 const xPre = (pp, c, code) => (pp.lb[c] - (pp.LLc ? pp.LLc[c] : pp.LL)[code] - pp.dLo[c]) / pp.rng[c];
 
+// ───────── 밝은 곳의 하늘빛 정리 (두 방식 공통, 출력 선형 RGB에서) ─────────
+// 흰색 기준은 해가 비친 흰 물체(차선·흰 차)에 잡히므로, 해와 하늘빛을 함께 받는 구름이나 하늘빛만 받는 흰 면은
+// 기준보다 파랗게(파랑이 빨강·초록보다 1/3~1/2스톱 짙게) 남아 연보라로 보임. 사람 눈과 카메라는 이런 밝은 흰 면을 흰색으로 봄.
+// 밝고(휘도 Y가 y0 → y1에서 점점) 옅은 색만, 휘도를 지키며 색을 회색 쪽으로 k만큼 당김. 당기는 대상:
+//  · 연보라 쪽으로 옅게 틀어진 색: 파랑 초과 β = log₂B − (log₂R + log₂G)/2가 b0 → b1에서 켜지고 b2 → b3에서 꺼지며
+//    (하늘처럼 진한 파랑은 그대로), 초록 부족 μ = (log₂R + log₂B)/2 − log₂G가 vb·β보다 v0 → v1만큼 클 때만.
+//    하늘·안개·그늘 같은 자연의 옅은 파랑은 μ ≈ 0~0.4β(푸른 축)라 그대로이고, 구름의 연보라는 μ ≈ 0.6β 이상
+//  · 어느 쪽이든 아주 옅은 색(로그 색 거리 c가 n0 → n1에서 꺼짐): 푸른 쪽만 당기면 흰 물체의 그레인·반사에서
+//    푸른 쪽 절반만 빠져 평균이 노래지므로 대칭으로 맞춤
+// 따뜻한 옅은 색(베이지 벽, 피부의 밝은 곳)은 c가 n1을 넘으면 그대로. 진한 색은 모두 그대로
+const HL = { y0: 0.35, y1: 0.6, k: 0.9, b0: -0.05, b1: 0.08, b2: 0.5, b3: 0.9, v0: -0.06, v1: 0.04, vb: 0.35, n0: 0.15, n1: 0.3 };
+const sstep = (x, a, b) => { const t = x <= a ? 0 : x >= b ? 1 : (x - a) / (b - a); return t * t * (3 - 2 * t); };
+// 부호화 값(sRGB 0–1) 버퍼에 하는 같은 처리: 잡음 줄이기 뒤에 씀. 밝은 픽셀만 선형으로 풀어 계산하고 바뀐 픽셀만 다시 부호화
+function hlPass(buf, n) {
+  const e0 = linToSrgb(HL.y0) - 1e-6;   // 휘도가 y0보다 크면 가장 밝은 채널의 부호값도 이보다 큼
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    const er = buf[j], eg = buf[j + 1], eb = buf[j + 2];
+    if (er <= e0 && eg <= e0 && eb <= e0) continue;
+    const r = srgbToLin(er), g = srgbToLin(eg), b = srgbToLin(eb), Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (Y <= HL.y0) continue;
+    const q = hlKeep(r, g, b, Y);
+    if (q === 1) continue;
+    let nr = Y + (r - Y) * q, ng = Y + (g - Y) * q, nb = Y + (b - Y) * q;
+    nr = nr < 0 ? 0 : nr > 1 ? 1 : nr; ng = ng < 0 ? 0 : ng > 1 ? 1 : ng; nb = nb < 0 ? 0 : nb > 1 ? 1 : nb;
+    buf[j] = ENC[(nr * 65535 + 0.5) | 0]; buf[j + 1] = ENC[(ng * 65535 + 0.5) | 0]; buf[j + 2] = ENC[(nb * 65535 + 0.5) | 0];
+  }
+}
+// 색을 남길 비율 (1 = 그대로). Y는 r, g, b의 휘도
+function hlKeep(r, g, b, Y) {
+  if (Y <= HL.y0) return 1;
+  const lr = Math.log2(r > 1e-6 ? r : 1e-6), lg = Math.log2(g > 1e-6 ? g : 1e-6), lb = Math.log2(b > 1e-6 ? b : 1e-6);
+  const m = (lr + lg + lb) / 3, dr = lr - m, dg = lg - m, db = lb - m, c = Math.sqrt(dr * dr + dg * dg + db * db);
+  if (c >= HL.b3 && c >= HL.n1) return 1;
+  const be = lb - (lr + lg) / 2, mu = (lr + lb) / 2 - lg;
+  const wc = sstep(be, HL.b0, HL.b1) * (1 - sstep(be, HL.b2, HL.b3)) * sstep(mu - HL.vb * be, HL.v0, HL.v1), wn = 1 - sstep(c, HL.n0, HL.n1);
+  return 1 - HL.k * sstep(Y, HL.y0, HL.y1) * (wc > wn ? wc : wn);
+}
+
 // ───────── 픽셀 처리 (LUT → 채도 → sRGB → 언샤프) ─────────
 function gaussBlur(src, w, h, sigma) {
   const r = Math.max(1, Math.ceil(sigma * 3)), k = new Float32Array(2 * r + 1);
@@ -2222,7 +2260,9 @@ function processRect(src, W, H, rx, ry, rw, rh, pp, sh) {
   const x1 = Math.min(W, rx + rw + pad), y1 = Math.min(H, ry + rh + pad);
   const pw = x1 - x0, ph = y1 - y0;
   const buf = new Float32Array(pw * ph * 3);
-  if (pp.mode === 'ai') aiRect(src, W, H, x0, y0, pw, ph, pp, buf);
+  // 밝은 곳의 하늘빛 정리는 보통 픽셀마다 바로 하고, 잡음 줄이기가 있으면 그 뒤에 함(그레인의 푸른 쪽 절반만 빠져 흰색이 노래지지 않게)
+  const hlIn = !(sh && sh.nr);
+  if (pp.mode === 'ai') aiRect(src, W, H, x0, y0, pw, ph, pp, buf, null, hlIn);
   else {
   const L0 = pp.lut[0], L1 = pp.lut[1], L2 = pp.lut[2], sat = pp.sat;
   let o = 0;
@@ -2234,12 +2274,14 @@ function processRect(src, W, H, rx, ry, rw, rh, pp, sh) {
         const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b; // 선형 휘도 보존 채도
         r = Y + sat * (r - Y); g = Y + sat * (g - Y); b = Y + sat * (b - Y);
       }
+      const Yh = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      if (hlIn && Yh > HL.y0) { const q = hlKeep(r, g, b, Yh); if (q !== 1) { r = Yh + (r - Yh) * q; g = Yh + (g - Yh) * q; b = Yh + (b - Yh) * q; } }
       r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
       buf[o] = ENC[(r * 65535 + 0.5) | 0]; buf[o + 1] = ENC[(g * 65535 + 0.5) | 0]; buf[o + 2] = ENC[(b * 65535 + 0.5) | 0];
     }
   }
   }
-  if (sh && sh.nr) aiDenoise(buf, pw, ph, sh.nr);
+  if (sh && sh.nr) { aiDenoise(buf, pw, ph, sh.nr); hlPass(buf, pw * ph); }
   if (sh && sh.amt > 0) unsharp(buf, pw, ph, sh);
   if (pw === rw && ph === rh) return buf;
   const out = new Float32Array(rw * rh * 3), ox = rx - x0, oy = ry - y0;
@@ -2817,7 +2859,7 @@ function aiCenterMean(LB, VI, nv, mw, lo, hi, cx, cy, sx2, sy2, med) {
 }
 // Ai+ 톤을 입혀 본 Lab 채도(C*)와 피부 픽셀 수 (step마다 하나)
 function aiColorStats(BL, VI, nv, step, lAvg, beta, lk, ns, nh, sv) {
-  let ns2 = 0, nsk = 0, nall = 0;
+  let ns2 = 0, nsk = 0, nall = 0, nhl = 0;
   const o = [0, 0, 0], ib = 1 / (1 - beta);
   for (let k = 0; k < nv; k += step) {
     const j = VI[k] * 3;
@@ -2829,14 +2871,16 @@ function aiColorStats(BL, VI, nv, step, lAvg, beta, lk, ns, nh, sv) {
     if (Y < 0.01 || mx > 0.97) continue;               // 아주 어둡거나 잘린 곳은 채도가 의미 없음
     const fx = Math.cbrt((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047), fy = Math.cbrt(Y), fz = Math.cbrt((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
     const ca = 500 * (fx - fy), cb = 200 * (fy - fz);
-    sv[ns2++] = Math.sqrt(ca * ca + cb * cb);
+    sv[ns2] = Math.sqrt(ca * ca + cb * cb);
+    if (Y > HL.y0 && (1 - hlKeep(r, g, b, Y)) * sv[ns2] >= 8) nhl++;   // 밝은 곳의 하늘빛 정리로 C*가 8 넘게 줄 픽셀 (설명용)
+    ns2++;
     const mn = r < g ? (r < b ? r : b) : (g < b ? g : b), s0 = (mx - mn) / mx;
     if (r >= g && g >= b && r > b && s0 > 0.12 && s0 < 0.7) {
       const h = (g - b) / (r - b);
       if (h > 0.13 && h < 0.75) nsk++;
     }
   }
-  return [ns2, nsk, nall];
+  return [ns2, nsk, nall, nhl];
 }
 // Ai+ 톤을 입혀 본 휘도(로그2) — 국소 대비 지도용 (비율 보존이라 출력 휘도 = 곡선값)
 function aiOutLum(LB, n, lAvg, beta, lk, ns, nh) {
@@ -2948,7 +2992,7 @@ function* aiAnalyzeG(P, s, an, area, cache) {
   yield;
   // ── 채도 평준화와 피부 비율
   const sv = new Float32Array(nv);
-  const [ns2, nsk, nall] = aiColorStats(BL, VI, nv, 3, lAvg, beta, lk, ns, nh, sv);
+  const [ns2, nsk, nall, nhl] = aiColorStats(BL, VI, nv, 3, lAvg, beta, lk, ns, nh, sv);
   const C75 = ns2 > 50 ? quantiles(sv, ns2, 0, 150, 1500, [0.75])[0] : 0;
   // 채도 상한은 명암 범위로: 안개처럼 흐린 장면은 satMax, 맑은 장면은 satMaxClear까지 (사이는 선형)
   const satCap = AI.satMax + (AI.satMaxClear - AI.satMax) * clamp((DR - (AI.blackDR - AI.blackSpan)) / AI.blackSpan, 0, 1);
@@ -2981,12 +3025,14 @@ function* aiAnalyzeG(P, s, an, area, cache) {
   if (fd > 0.2) labels.push('밝은 장면 유지'); else if (fd < -0.2) labels.push('어두운 장면 유지');
   if (beta > 0.1) labels.push('안개 걷기');
   if (DR > 9) labels.push('명암 압축');
+  const hlFrac = nhl / Math.max(nall, 1);
+  if (hlFrac >= 0.01) labels.push('밝은 곳 푸른 기 정리');
   if (sigma >= 1.04) labels.push('채도 +' + Math.round((sigma - 1) * 100) + '%'); else if (sigma <= 0.96) labels.push('채도 −' + Math.round((1 - sigma) * 100) + '%');
 
   return {
     cp, lx, RT, lKey: lAvg, Ykey, lk, ns, nh, beta, sigma, dmap, mw, mh, labels, grain: undefined,
     slope: tS ? { tS, mid: cast.mid, span: cast.span } : null,
-    stats: { tauMid, muMid, ambT, castMax, cast, f, fd, DR, lLo, lHi, mHi, lAvg, lMed, bT, skinFrac, C75, nv, dEV, tS },
+    stats: { tauMid, muMid, ambT, castMax, cast, f, fd, DR, lLo, lHi, mHi, lAvg, lMed, bT, skinFrac, C75, nv, dEV, tS, hlFrac },
   };
 }
 
@@ -3037,7 +3083,8 @@ function buildPipeAi(s, an, ai) {
 
 // Ai+ 픽셀 처리: LUT(화밸·노출) → 휘도 톤(채널 비 보존, 색역 압축) → 바이브런스·채도 → 국소 대비 → sRGB 부호화.
 // buf(부호화 값 0–1, 3채널)에 채우거나, out8을 주면 캔버스용 8비트 RGBA에 바로 씀
-function aiRect(src, W, H, x0, y0, pw, ph, pp, buf, out8) {
+// hlIn: 밝은 곳의 하늘빛 정리를 여기서 할지 (거짓이면 부르는 쪽이 잡음 줄이기 뒤에 hlPass로)
+function aiRect(src, W, H, x0, y0, pw, ph, pp, buf, out8, hlIn = true) {
   const L0 = pp.lut[0], L1 = pp.lut[1], L2 = pp.lut[2], TY = pp.TY, CT = pp.CT || null, F32 = AI_F32, I32 = AI_I32, TLAST = AIT_N - 1;
   const U0 = CT !== null ? pp.lutU[0] : null, U2 = CT !== null ? pp.lutU[1] : null;
   const ai = pp.ai, D = ai.dmap, mw = ai.mw, mh = ai.mh, kx = mw / W, ky = mh / H;
@@ -3128,6 +3175,8 @@ function aiRect(src, W, H, x0, y0, pw, ph, pp, buf, out8) {
         }
         r = nr; g = ng; b = nb;
       }
+      // 밝은 곳의 하늘빛 정리 (바이브런스·채도 뒤: 올린 색까지 함께)
+      if (hlIn && Y > HL.y0) { const q = hlKeep(r, g, b, Y); if (q !== 1) { r = Y + (r - Y) * q; g = Y + (g - Y) * q; b = Y + (b - Y) * q; } }
 
       // 국소 대비: 지도에서 쌍선형 보간한 스톱 값. 밝기 양 끝(검정·흰색 근처)에서는 약하게
       const xa = XA[kx2], dl = Drow[xa] + (Drow[xa + 1] - Drow[xa]) * WX[kx2];
@@ -3169,7 +3218,7 @@ function aiGrain(F, pp) {
   const cx = [0.5, 0.25, 0.75, 0.25, 0.75], cy = [0.5, 0.25, 0.25, 0.75, 0.75];
   for (let q = 0; q < 5; q++) {
     const x0 = clamp(Math.round(F.w * cx[q] - bw / 2), 0, F.w - bw), y0 = clamp(Math.round(F.h * cy[q] - bh / 2), 0, F.h - bh);
-    aiRect(F.d, F.w, F.h, x0, y0, bw, bh, pp, buf);
+    aiRect(F.d, F.w, F.h, x0, y0, bw, bh, pp, buf, null, false);   // 저장 때처럼 하늘빛 정리 전의 그레인을 잼
     for (let i = 0, j = 0; i < n; i++, j += 3) {
       const y = 0.2126 * buf[j] + 0.7152 * buf[j + 1] + 0.0722 * buf[j + 2];
       Y[i] = y; U[i] = buf[j + 2] - y; Vv[i] = buf[j] - y;
@@ -3275,36 +3324,70 @@ function pngChunk(type, data) {
   new DataView(tail.buffer).setUint32(0, crc32(data, crc32(tb)));
   return [head, data, tail];
 }
-async function encodePNG16(u16, w, h, onProg) {
-  const cs = new CompressionStream('deflate');
-  const zp = new Response(cs.readable).arrayBuffer();
-  const wr = cs.writable.getWriter();
-  const rowBytes = 1 + w * 6, BLK = 64, n3 = w * 3;
-  for (let y = 0; y < h; y += BLK) {
-    const rows = Math.min(BLK, h - y), blk = new Uint8Array(rows * rowBytes);
-    for (let r = 0; r < rows; r++) {
-      const yy = y + r, s0 = yy * n3, p0 = s0 - n3;
-      let o = r * rowBytes;
-      blk[o++] = 2; // Up 필터
-      if (yy === 0) for (let j = 0; j < n3; j++) { const v = u16[s0 + j]; blk[o++] = v >> 8; blk[o++] = v & 255; }
-      else for (let j = 0; j < n3; j++) {
-        const v = u16[s0 + j], pv = u16[p0 + j];
-        blk[o++] = ((v >> 8) - (pv >> 8)) & 255;
-        blk[o++] = ((v & 255) - (pv & 255)) & 255;
-      }
+// 16비트 RGB PNG. 줄마다 Up 필터(바로 윗줄과의 바이트 차) → zlib 스트림 하나 → IDAT 조각 여러 개(약 1MB씩).
+// 압축되어 나오는 대로 IDAT으로 묶어 쥐므로 압축본을 통째로 이어 붙인 사본을 만들지 않음 (조각당 2^31−1바이트 한도와도 무관).
+// 색 정보는 sRGB 조각과, 이를 모르는 프로그램을 위한 gAMA·cHRM(PNG 규격이 sRGB와 함께 넣으라고 권하는 값).
+// 해상도(pHYs)는 TIFF와 같은 300dpi, 만든 프로그램(Software)·시각(tIME), desc는 Comment(tEXt)로 IDAT 앞에 넣음.
+// 필터 비교(24MP, zlib 6): Up 95.3MB · Sub 95.3MB · 줄마다 고르기 96.1MB · Paeth 99.4MB · Average 105.7MB → Up을 그대로 씀
+async function encodePNG16(u16, w, h, onProg, desc) {
+  const cs = new CompressionStream('deflate'), wr = cs.writable.getWriter(), rd = cs.readable.getReader();
+  const idat = [], IDAT_MAX = 1 << 20;
+  let pend = [], pn = 0;
+  const flush = () => {   // 모아 둔 압축 조각을 IDAT 하나로
+    if (!pn) return;
+    const d = pend.length === 1 ? pend[0] : new Uint8Array(pn);
+    if (pend.length > 1) { let o = 0; for (const c of pend) { d.set(c, o); o += c.length; } }
+    idat.push(...pngChunk('IDAT', d)); pend = []; pn = 0;
+  };
+  // 읽는 쪽: 압축 중 오류를 그 오류 그대로 던짐(deflate()와 같은 까닭)
+  const reading = (async () => {
+    for (let r; !(r = await rd.read()).done;) {
+      if (pn + r.value.length > IDAT_MAX) flush();
+      pend.push(r.value); pn += r.value.length;
     }
-    await wr.write(blk);
-    if (onProg && (y / BLK) % 8 === 0) onProg(y / h);
-  }
-  await wr.close();
-  const z = new Uint8Array(await zp);
+    flush();
+  })();
+  const rowBytes = 1 + w * 6, BLK = 64, n3 = w * 3, blk = new Uint8Array(Math.min(BLK, h) * rowBytes);
+  try {
+    for (let y = 0; y < h; y += BLK) {
+      const rows = Math.min(BLK, h - y);
+      for (let r = 0; r < rows; r++) {
+        const yy = y + r, s0 = yy * n3, p0 = s0 - n3;
+        let o = r * rowBytes;
+        blk[o++] = 2; // Up 필터
+        if (yy === 0) for (let j = 0; j < n3; j++) { const v = u16[s0 + j]; blk[o++] = v >> 8; blk[o++] = v & 255; }
+        else for (let j = 0; j < n3; j++) {
+          const v = u16[s0 + j], pv = u16[p0 + j];
+          blk[o++] = ((v >> 8) - (pv >> 8)) & 255;
+          blk[o++] = ((v & 255) - (pv & 255)) & 255;
+        }
+      }
+      await wr.write(blk.slice(0, rows * rowBytes));   // 스트림이 조각을 쥐고 있을 수 있으므로 사본을 넘김
+      if (onProg && (y / BLK) % 8 === 0) onProg(y / h);
+      await yieldTask();
+    }
+    await wr.close();
+  } catch (e) { await reading; throw e; }   // 쓰는 쪽 오류는 읽는 쪽에도 오므로 그 오류를 던짐
+  await reading;
   const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer);
   dv.setUint32(0, w); dv.setUint32(4, h); ihdr[8] = 16; ihdr[9] = 2; // 16비트 RGB
+  const u32 = a => { const b = new Uint8Array(4 * a.length), v = new DataView(b.buffer); a.forEach((x, i) => v.setUint32(4 * i, x)); return b; };
+  const phys = new Uint8Array(9); phys.set(u32([11811, 11811])); phys[8] = 1;   // 300dpi = 11811 화소/m
+  const t = new Date(), tm = new Uint8Array(7), tv = new DataView(tm.buffer);   // tIME은 UTC
+  tv.setUint16(0, t.getUTCFullYear()); tm.set([t.getUTCMonth() + 1, t.getUTCDate(), t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds()], 2);
+  const text = (k, s) => { const a = ascii(k), b = new TextEncoder().encode(s), d = new Uint8Array(a.length + 1 + b.length); d.set(a); d.set(b, a.length + 1); return pngChunk('tEXt', d); };
+  if (onProg) onProg(1);
   return new Blob([
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
     ...pngChunk('IHDR', ihdr),
-    ...pngChunk('sRGB', new Uint8Array([0])),
-    ...pngChunk('IDAT', z),
+    ...pngChunk('sRGB', new Uint8Array([0])),   // 지각적 렌더링 의도
+    ...pngChunk('gAMA', u32([45455])),
+    ...pngChunk('cHRM', u32([31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000])),   // 백색점 D65, sRGB 원색 (×100000)
+    ...pngChunk('pHYs', phys),
+    ...pngChunk('tIME', tm),
+    ...text('Software', 'Posity ' + VERSION),
+    ...(desc ? text('Comment', desc) : []),
+    ...idat,
     ...pngChunk('IEND', new Uint8Array(0)),
   ], { type: 'image/png' });
 }
@@ -3529,8 +3612,9 @@ function syncAi() {
     }
   }
   $('#aiScene').textContent = lab;
-  $('#aiScene').title = lab.includes('화밸 보정(') ? '괄호 안 값은 가운데 밝기에서 뺀 색 틀어짐을 색온도·색조 슬라이더 단위로 환산한 양입니다. 되돌리려면 슬라이더를 반대 방향으로 그만큼 움직이세요.'
-    + (lab.includes('밝을수록 더') ? ' ‘밝을수록 더’는 사진 전체가 따뜻한(호박색) 쪽으로 기울고 전등처럼 작고 밝은 빛이 흰색 기준을 잡은 장면에서, 밝기에 따라 다르게 남은 따뜻함을 고쳤다는 뜻입니다. 가운데보다 밝은 곳은 따뜻함을 더 빼고 어두운 곳은 덜 빼므로, 그림자는 조금 따뜻하게 남을 수 있습니다. 이 밝기별 몫은 가장 밝은 곳(흰색 기준)에 가까워지면 0으로 줄어듭니다. 슬라이더로는 가운데 밝기 몫만 되돌아갑니다.' : '') : '';
+  const hlTip = lab.includes('밝은 곳 푸른 기 정리') ? ' ‘밝은 곳 푸른 기 정리’는 구름, 그늘진 흰 벽처럼 하늘빛을 받아 연보라·옅은 파랑으로 남은 밝은 흰 면을 흰색 쪽으로 당겼다는 뜻입니다. 하늘처럼 진한 파랑과 베이지 벽·피부처럼 따뜻한 옅은 색은 그대로 둡니다. 기존 방식에도 같은 처리가 들어 있습니다.' : '';
+  $('#aiScene').title = ((lab.includes('화밸 보정(') ? '괄호 안 값은 가운데 밝기에서 뺀 색 틀어짐을 색온도·색조 슬라이더 단위로 환산한 양입니다. 되돌리려면 슬라이더를 반대 방향으로 그만큼 움직이세요.'
+    + (lab.includes('밝을수록 더') ? ' ‘밝을수록 더’는 사진 전체가 따뜻한(호박색) 쪽으로 기울고 전등처럼 작고 밝은 빛이 흰색 기준을 잡은 장면에서, 밝기에 따라 다르게 남은 따뜻함을 고쳤다는 뜻입니다. 가운데보다 밝은 곳은 따뜻함을 더 빼고 어두운 곳은 덜 빼므로, 그림자는 조금 따뜻하게 남을 수 있습니다. 이 밝기별 몫은 가장 밝은 곳(흰색 기준)에 가까워지면 0으로 줄어듭니다. 슬라이더로는 가운데 밝기 몫만 되돌아갑니다.' : '') : '') + hlTip).trim();
   $('#aiNote').hidden = !(cur && cur.ai);
   const aiNow = !!(cur && cur.ai);
   $('#selBlack').disabled = $('#selChan').disabled = !cur || aiNow;
@@ -3921,6 +4005,8 @@ function render8(src, n, pp, o) {
       const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       r = Y + sat * (r - Y); g = Y + sat * (g - Y); b = Y + sat * (b - Y);
     }
+    const Yh = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (Yh > HL.y0) { const q = hlKeep(r, g, b, Yh); if (q !== 1) { r = Yh + (r - Yh) * q; g = Yh + (g - Yh) * q; b = Yh + (b - Yh) * q; } }
     r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
     o[k] = ENC8[(r * 65535 + 0.5) | 0]; o[k + 1] = ENC8[(g * 65535 + 0.5) | 0]; o[k + 2] = ENC8[(b * 65535 + 0.5) | 0];
   }
@@ -4662,7 +4748,7 @@ async function renderFull(F, s, pp, fmt, onProg, box) {
       onProg(0.7 * (y + rh) / r.h); await tick();
     }
     if (fmt === 'tif16') return encodeTIFF16(u, r.w, r.h, f => onProg(0.7 + 0.3 * f), ivTag());   // 서명은 ImageDescription에
-    return encodePNG16(u, r.w, r.h, f => onProg(0.7 + 0.3 * f));
+    return encodePNG16(u, r.w, r.h, f => onProg(0.7 + 0.3 * f), ivTag());   // 서명은 Comment(tEXt)에
   }
   const cv = document.createElement('canvas'); cv.width = r.w; cv.height = r.h;
   const cx = cv.getContext('2d'), img = cx.createImageData(r.w, r.h), o = img.data;
@@ -4681,16 +4767,17 @@ async function renderFull(F, s, pp, fmt, onProg, box) {
 const EXT = { jpg: 'jpg', png8: 'png', png16: 'png', tif16: 'tif' };
 // 파일에 남기는 서명 문구 (사람이 열어 보면 보이는 텍스트). 보이지 않는 픽셀 표식과 짝
 function ivTag() { return 'Posity watermark; ' + FX_T.map(fxS).join(' ') + '; id=' + ('00000000' + ivKey().toString(16)).slice(-8); }
-// PNG 바이트에 tEXt 조각을 IEND 앞에 끼움 (키워드 Comment)
+// PNG 바이트에 tEXt 조각을 IEND 앞에 끼움 (키워드 Comment). 캔버스로 만든 PNG8에만 씀.
+// 파일 전체를 읽어 복사하지 않고 끝 12바이트(IEND)만 읽어 확인한 뒤 Blob을 잘라 이어 붙임 (Blob.slice는 바이트를 복사하지 않음)
 async function pngAddText(blob, text) {
-  const b = new Uint8Array(await blob.arrayBuffer());
-  if (!(b[0] === 0x89 && b[1] === 0x50)) return blob;   // PNG 아님
-  // IEND 조각(길이 0 + 'IEND' + CRC = 마지막 12바이트) 앞에 삽입
-  const iend = b.length - 12;
+  const iend = blob.size - 12;
+  if (iend < 8) return blob;
+  const t = new Uint8Array(await blob.slice(iend).arrayBuffer());
+  if (String.fromCharCode(t[4], t[5], t[6], t[7]) !== 'IEND') return blob;   // PNG 끝이 아님
   const data = ascii('Comment'); const kv = new Uint8Array(data.length + 1 + text.length);
   kv.set(data, 0); kv[data.length] = 0; kv.set(new TextEncoder().encode(text), data.length + 1);
-  const [h, d, t] = pngChunk('tEXt', kv);
-  return new Blob([b.slice(0, iend), h, d, t, b.slice(iend)], { type: 'image/png' });
+  const [h, d, c] = pngChunk('tEXt', kv);
+  return new Blob([blob.slice(0, iend), h, d, c, blob.slice(iend)], { type: 'image/png' });
 }
 // JPEG 바이트에 COM(주석) 조각을 SOI 바로 뒤에 끼움
 async function jpgAddComment(blob, text) {
@@ -4703,7 +4790,7 @@ async function jpgAddComment(blob, text) {
   return new Blob([b.slice(0, 2), seg, b.slice(2)], { type: 'image/jpeg' });
 }
 async function addSignature(blob, fmt) {
-  if (fmt === 'tif16') return blob;   // TIFF는 인코딩 때 ImageDescription(270)에 같은 서명(ivTag)을 넣음
+  if (fmt === 'tif16' || fmt === 'png16') return blob;   // TIFF·PNG16은 인코딩 때 같은 서명(ivTag)을 넣음 (ImageDescription(270)·Comment)
   const tag = ivTag();
   return fmt === 'jpg' ? jpgAddComment(blob, tag) : pngAddText(blob, tag);
 }
