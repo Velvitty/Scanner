@@ -903,6 +903,9 @@ async function decodeTIFF(buf, onProg, pause) {
   if (!(bps === 8 || bps === 16 || (bps === 32 && fmt === 3))) throw new Error(`${bps}비트 ${fmt === 3 ? '실수' : '정수'} 표본은 지원하지 않습니다. 8·16비트 정수 또는 32비트 실수만 읽습니다.`);
   if (!COMP[comp]) throw new Error(`압축 방식 ${comp}${comp === 7 ? '(JPEG)' : ''}은 지원하지 않습니다. 무압축, LZW, Deflate, PackBits만 읽습니다.`);
   if (pred !== 1 && pred !== 2) throw new Error('부동소수 예측자(Predictor=3)는 지원하지 않습니다.');
+  // 부호 있는 정수 표본(SampleFormat 2)과, 실수 표본의 수평 차분 예측(Predictor 2)은 풀지 않으므로 거절 (그대로 읽으면 값이 틀어짐)
+  if (fmt === 2) throw new Error('부호 있는 정수 표본의 TIFF는 지원하지 않습니다. 부호 없는 8·16비트로 저장해 주세요.');
+  if (bps === 32 && pred === 2) throw new Error('수평 차분 예측(Predictor 2)을 쓴 32비트 실수 TIFF는 지원하지 않습니다.');
 
   const Bps = bps / 8;
   const tiled = !!t[322];
@@ -983,7 +986,15 @@ async function decodeTIFF(buf, onProg, pause) {
     }
   }
   const icc = t.icc || ifds[0].icc;   // 보통 IFD0에 있음
-  return { d: out, w: W, h: H, bits: bps, kind: `TIFF ${COMP[comp]}${spp < 3 ? ', 흑백' : ''}`, enc: icc ? encFromICC(icc) : null };
+  // 방향 태그(274): 2~8이면 화면에 바로 선 방향으로 돌려 둠 (먼저 좌우 반전, 그다음 시계 방향 k번)
+  let img = { d: out, w: W, h: H, bits: bps, kind: `TIFF ${COMP[comp]}${spp < 3 ? ', 흑백' : ''}`, enc: icc ? encFromICC(icc) : null };
+  const ori = t[274]?.[0] ?? 1, OT = { 2: [1, 0], 3: [0, 2], 4: [1, 2], 5: [1, 3], 6: [0, 1], 7: [1, 1], 8: [0, 3] }[ori];
+  if (OT) {
+    if (OT[0]) img = flipImg(img);
+    if (OT[1] === 3) img = rotateImg(img, false);
+    else for (let k = 0; k < OT[1]; k++) img = rotateImg(img, true);
+  }
+  return img;
 }
 
 // 생성기로 쓴 해독 단계를 돌림: pause가 있으면(백그라운드) yield마다 쉬고, 없으면 0.1초마다 진행 막대를 그릴 틈만 줌.
@@ -1303,6 +1314,9 @@ async function decodeDNG(u8, dv, le, ifds, t, onProg, pause) {
   const xf = (isF ? { 1: 0, 3: 1, 34894: 2, 34895: 4 } : { 1: 0, 2: 1, 34892: 2, 34893: 4 })[pred];
   if (xf === undefined || (xf && comp !== 8)) throw new Error(`이 DNG의 예측자(${pred})는 지원하지 않습니다.`);
   if ((t[284]?.[0] ?? 1) !== 1 && spp > 1) throw new Error('평면 배치 DNG는 지원하지 않습니다.');
+  // 저장 순서를 바꾸는 태그(SubTileBlockSize 50974, RowInterleaveFactor 50975, ColumnInterleaveFactor 52547)는 되돌리지 않으므로 거절
+  if ((t[50974] && (t[50974][0] !== 1 || (t[50974][1] ?? 1) !== 1)) || (t[50975] && t[50975][0] !== 1) || (t[52547] && t[52547][0] !== 1))
+    throw new Error('픽셀 저장 순서를 바꾼 DNG(인터리브·서브타일)는 지원하지 않습니다.');
   // CFA 배열: 2×2 베이어만 (CFAPlaneColor로 0 R·1 G·2 B에 맞춤). 기준점은 활성 영역의 왼쪽 위
   let pat = null;
   if (cfa) {
