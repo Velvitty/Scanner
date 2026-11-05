@@ -4,6 +4,463 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <!-- Velvitty launch screen -->
+<!-- Velvitty UI snapshot -->
+<template id="velvitty-ui-fallback">&lt;!doctype html&gt;
+
+&lt;html lang=&quot;ko&quot;&gt;
+&lt;head&gt;&lt;base href=&quot;./&quot;&gt;&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;none&#x27;; connect-src &#x27;none&#x27;; style-src &#x27;self&#x27; &#x27;unsafe-inline&#x27; https:; img-src &#x27;self&#x27; data: https:; font-src &#x27;self&#x27; data: https:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; form-action &#x27;none&#x27;; base-uri &#x27;self&#x27;&quot;&gt;&lt;style&gt;html{pointer-events:none!important}*{animation-play-state:paused!important;caret-color:transparent!important}&lt;/style&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1, viewport-fit=cover&quot;&gt;
+&lt;meta name=&quot;color-scheme&quot; content=&quot;light dark&quot;&gt;
+
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;title&gt;Posity — 컬러 네거티브 변환기&lt;/title&gt;
+
+
+
+
+
+&lt;link href=&quot;https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&amp;amp;family=IBM+Plex+Sans+KR:wght@400;500;600&amp;amp;family=Outfit:wght@700&amp;amp;display=swap&quot; rel=&quot;stylesheet&quot;&gt;
+&lt;style&gt;
+/* ───────── 색 토큰: 색 판단을 방해하지 않도록 UI는 완전 무채색 ───────── */
+:root{
+  --bg:#e7e7e7; --panel:#f3f3f3; --raise:#e4e4e4; --line:#cdcdcd; --line-strong:#a9a9a9;
+  --text:#1b1b1b; --muted:#666666; --viewer:#b3b3b3;
+  --ink:#1b1b1b; --ink-text:#f3f3f3;
+  --film:#1a1a1a; --film-text:#bdbdbd; --hole:#e7e7e7; --hist-bg:#151515;
+  color-scheme:light;   /* 선택 상자 목록·체크박스·스크롤 막대 같은 브라우저 기본 부품도 테마를 따르게 */
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+/* 어두운 테마: 기기(운영체제)가 어두운 모드이면 항상 따름. 기기가 밝은 모드여도 이 페이지를 감싼 뷰어가
+   어두운 테마를 지정하면(data-theme=&quot;dark&quot;) 어둡게. 뷰어가 밝은 테마를 지정해도 기기가 어두우면 어둡게 둠 */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1e1e1e; --panel:#262626; --raise:#303030; --line:#3a3a3a; --line-strong:#5a5a5a;
+    --text:#e6e6e6; --muted:#9a9a9a; --viewer:#2c2c2c;
+    --ink:#e6e6e6; --ink-text:#1e1e1e;
+    --film:#161616; --film-text:#a8a8a8; --hole:#2c2c2c; --hist-bg:#151515;
+    color-scheme:dark;
+  }
+}
+:root[data-theme=&quot;dark&quot;]{
+  --bg:#1e1e1e; --panel:#262626; --raise:#303030; --line:#3a3a3a; --line-strong:#5a5a5a;
+  --text:#e6e6e6; --muted:#9a9a9a; --viewer:#2c2c2c;
+  --ink:#e6e6e6; --ink-text:#1e1e1e;
+  --film:#161616; --film-text:#a8a8a8; --hole:#2c2c2c; --hist-bg:#151515;
+  color-scheme:dark;
+}
+/* details 안쪽은 UA 섀도 트리의 slot을 거쳐 상속되므로 inherit 대신 직접 지정 */
+*,*::before,*::after{box-sizing:border-box}
+/* hidden 속성이 display 지정에 묻히지 않도록 */
+[hidden]{display:none!important}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:13px/1.45 &quot;IBM Plex Sans KR&quot;,system-ui,-apple-system,&quot;Apple SD Gothic Neo&quot;,&quot;Malgun Gothic&quot;,&quot;Noto Sans KR&quot;,sans-serif;
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+}
+button,select{
+  font:inherit;color:var(--text);background:var(--raise);
+  border:1px solid var(--line);border-radius:4px;padding:5px 10px;cursor:pointer;
+}
+button:hover:not(:disabled),select:hover:not(:disabled){border-color:var(--line-strong)}
+button[aria-pressed=&quot;true&quot;],button.primary{background:var(--ink);color:var(--ink-text);border-color:var(--ink)}
+button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr)}
+
+/* 상단 바 */
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand .chip{width:26px;height:18px;border-radius:2px;background:var(--base-chip,var(--line-strong));box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);transition:background .4s}
+.brand small{font-size:12px;font-weight:400;color:var(--muted)}
+.brand .logo{font:700 16px/1 &quot;Outfit&quot;,&quot;Helvetica Neue&quot;,Arial,system-ui,sans-serif;letter-spacing:.01em}
+a.hbtn{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:30px;padding:0 12px;border:1px solid var(--line);border-radius:4px;background:var(--raise);color:var(--text);font:inherit;font-size:13px;text-decoration:none;white-space:nowrap}
+a.hbtn:hover{border-color:var(--line-strong)}
+.empty .help{font-size:13px;margin:12px 0 0}
+.empty .help a,details .more a{color:inherit}
+details .more{margin:8px 0 0;font-size:12.5px}
+.brand .ver{font:500 11px/1 &quot;IBM Plex Sans Condensed&quot;,&quot;Arial Narrow&quot;,sans-serif;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:2px 5px;letter-spacing:.02em}
+
+.work{display:grid;grid-template-columns:118px minmax(0,1fr) 318px;min-height:0}
+
+/* 필름 스트립: 스프로킷 구멍은 배경으로 그림 */
+.strip{
+  background-color:var(--film);color:var(--film-text);overflow-y:auto;padding:10px 22px;
+  background-image:linear-gradient(to bottom,var(--hole) 0 10px,transparent 10px 22px),linear-gradient(to bottom,var(--hole) 0 10px,transparent 10px 22px);
+  background-size:8px 22px,8px 22px;background-repeat:repeat-y;
+  background-position:7px 6px,calc(100% - 7px) 6px;background-attachment:local;
+}
+.strip ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.frame{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;border-radius:0}
+.frame .edge{display:block;font:600 12px/1 &quot;IBM Plex Sans Condensed&quot;,&quot;Arial Narrow&quot;,sans-serif;letter-spacing:.02em;margin-bottom:4px;opacity:.8}
+.frame .pic{display:grid;place-items:center;aspect-ratio:1;background:#0c0c0c;outline:1px solid #2b2b2b;overflow:hidden}
+.frame .pic img{width:100%;height:100%;object-fit:contain;display:block}
+.frame .pic span{font-size:11px;color:#6f6f6f;padding:4px;text-align:center;word-break:break-all}
+.frame .fname{display:block;font-size:11px;margin-top:4px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frame[aria-current=&quot;true&quot;] .pic{outline:2px solid #ececec}
+.frame[aria-current=&quot;true&quot;] .edge{opacity:1}
+.strip li{position:relative}
+.fdel{position:absolute;top:-3px;right:0;width:20px;height:20px;padding:0;border-radius:3px;font-size:14px;line-height:1;background:rgba(0,0,0,.6);color:#ddd;border:1px solid #444;opacity:0}
+.strip li:hover .fdel,.fdel:focus-visible{opacity:1}
+@media (hover: none){ .fdel{opacity:.85} }
+.strip .none{font-size:11px;color:#6f6f6f;line-height:1.5}
+
+/* 작업 영역 */
+.stage{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-width:0;min-height:0;background:var(--viewer)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.toolbar .sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.viewer{position:relative;display:grid;place-items:center;overflow:hidden;min-height:0;touch-action:manipulation}
+.viewer.cropping{touch-action:none}
+.viewer.drag{outline:2px dashed var(--text);outline-offset:-10px}
+#view{display:block;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+#view.pick{cursor:crosshair}
+#view.crop{cursor:crosshair}
+.empty{max-width:40ch;text-align:center;color:var(--muted);padding:24px}
+.empty strong{display:block;color:var(--text);font-size:18px;font-weight:600;margin-bottom:8px;letter-spacing:-.01em}
+.empty p{margin:0 0 14px}
+.status{display:flex;justify-content:space-between;gap:16px;padding:6px 12px;font-size:12px;color:var(--muted);background:var(--panel);border-top:1px solid var(--line)}
+.status span:last-child{text-align:right}
+
+.loupe{position:absolute;right:14px;bottom:14px;width:220px;height:220px;background:#000;border:1px solid var(--line-strong)}
+.loupe canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+.loupe b{position:absolute;left:7px;top:5px;font-size:11px;font-weight:500;color:#fff;mix-blend-mode:difference}
+
+.busy{position:absolute;inset:0;display:grid;place-content:center;gap:10px;text-align:center;background:color-mix(in srgb,var(--viewer) 82%,transparent)}
+.busy .bt{font-weight:600}
+.busy .bd{font-size:12px;color:var(--muted);max-width:40ch}
+.busy .track{width:240px;height:3px;background:var(--line);justify-self:center}
+.busy .fill{height:100%;width:0;background:var(--text)}
+.busy button{justify-self:center;margin-top:2px}
+
+/* 오른쪽 패널 */
+.panel{overflow-y:auto;background:var(--panel);border-left:1px solid var(--line);padding:12px 16px 24px}
+.hist{position:relative;height:96px;background:var(--hist-bg);border-radius:3px}
+.hist canvas{width:100%;height:100%;display:block}
+.sec{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.sec &gt; summary{font-weight:600;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+.sec &gt; summary::-webkit-details-marker{display:none}
+.sec &gt; summary::after{content:&quot;＋&quot;;color:var(--muted);font-weight:400}
+.sec[open] &gt; summary::after{content:&quot;－&quot;}
+.sec &gt; summary + *{margin-top:6px}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:0 8px;margin:9px 0 2px}
+.ctl label{color:var(--muted);user-select:none}
+.ctl output{font-size:12px}
+.ctl input{grid-column:1/-1;width:100%}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.field{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;margin:9px 0}
+.field span{color:var(--muted)}
+.field select{width:100%;min-width:0;text-overflow:ellipsis}
+.base{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:center;margin:4px 0}
+.base .sw{width:44px;height:30px;border-radius:2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);background:var(--raise)}
+.base .v{font-size:12px;line-height:1.4}
+.base .v em{font-style:normal;color:var(--muted)}
+.dens{display:grid;grid-template-columns:auto 1fr;gap:1px 10px;font-size:12px;margin:8px 0;color:var(--muted)}
+.dens b{font-weight:500;color:var(--text)}
+.note{font-size:12px;color:var(--muted);margin:6px 0}
+#encNote{overflow-wrap:anywhere}
+.how ol{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:12px}
+.how li{margin:4px 0}
+.foot{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap}
+.foot button{flex:1 1 40%}
+
+/* Ai+ 스위치 */
+.aibox{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--raise)}
+.aisw{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.aisw input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.aisw .sw{position:relative;flex:none;width:34px;height:20px;border-radius:10px;background:var(--line-strong);transition:background .15s}
+.aisw .sw::after{content:&quot;&quot;;position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--panel);transition:transform .15s}
+.aisw input:checked + .sw{background:var(--ink)}
+.aisw input:checked + .sw::after{transform:translateX(14px)}
+.aisw input:focus-visible + .sw{outline:2px solid var(--text);outline-offset:2px}
+.aisw b{font:600 16px/1 &quot;IBM Plex Sans Condensed&quot;,&quot;Arial Narrow&quot;,sans-serif;letter-spacing:.02em}
+.aist{margin-left:auto;font-size:12px;color:var(--muted);text-align:right}
+.aiinfo{margin-top:8px;display:grid;gap:6px}
+.aiscene{font-size:12px;line-height:1.5;word-break:keep-all;overflow-wrap:break-word}
+.aiskip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer}
+.aiinfo .note{margin:0}
+
+/* 슬라이더: 얇은 선 + 페이더 손잡이 */
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;height:18px;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line-strong)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:16px;margin-top:-7px;border-radius:2px;background:var(--text);border:0}
+input[type=range]::-moz-range-track{height:2px;background:var(--line-strong)}
+input[type=range]::-moz-range-thumb{width:9px;height:16px;border-radius:2px;background:var(--text);border:0}
+input[type=range]:disabled{opacity:.4;cursor:not-allowed}
+.ctl.temp input::-webkit-slider-runnable-track{background:linear-gradient(90deg,#5b82d6,#9a9a9a,#d7a64a)}
+.ctl.temp input::-moz-range-track{background:linear-gradient(90deg,#5b82d6,#9a9a9a,#d7a64a)}
+.ctl.tint input::-webkit-slider-runnable-track{background:linear-gradient(90deg,#55ad5e,#9a9a9a,#c05cbf)}
+.ctl.tint input::-moz-range-track{background:linear-gradient(90deg,#55ad5e,#9a9a9a,#c05cbf)}
+
+/* 툴바 안 슬라이더(기울기, 자르는 동안만): 이름 · 슬라이더 · 값 한 줄 */
+.toolbar .ctl{display:flex;align-items:center;gap:6px;margin:0 2px}
+.toolbar .ctl input{width:120px;order:1}
+.toolbar .ctl output{order:2;min-width:48px}
+/* 되돌리기·다시 하기 글자는 넓은 화면에서만 (그 밖에는 ↶ ↷ 기호만, 이름은 aria-label·title) → 도구 막대가 한 줄에 들어감 */
+@media (max-width: 1366px){ .toolbar .tl{display:none} #btnUndo,#btnRedo{padding-left:8px;padding-right:8px} }
+.viewer.drawing{touch-action:none}
+/* 필름 스트립 여러 장 고르기: 고른 프레임은 회색 테두리와 ✓ 표시 (지금 연 프레임은 흰 테두리) */
+.frame{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.frame .pic{position:relative}
+.frame.sel .pic{outline:2px solid #8f8f8f}
+.frame.sel[aria-current=&quot;true&quot;] .pic{outline-color:#ececec}
+.frame.sel .pic::after{content:&quot;✓&quot;;position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#ececec;color:#111;font:600 11px/16px system-ui,sans-serif;text-align:center}
+.selinfo{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:8px 0 0}
+.selinfo span{flex:1}
+.selinfo button{padding:2px 9px;font-size:12px;flex:none}
+
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--ink-text);padding:8px 14px;border-radius:4px;font-size:12px;max-width:min(90vw,520px);opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+.toast.act.on{pointer-events:auto}
+.toast button{margin-left:10px;padding:2px 9px;background:transparent;color:inherit;border-color:currentColor;font-size:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+@media (max-width: 900px){
+  html,body,.app{height:auto}
+  .work{grid-template-columns:1fr;grid-template-rows:auto 62vh auto}
+  .strip{
+    padding:22px 10px;overflow-x:auto;overflow-y:hidden;
+    background-image:linear-gradient(to right,var(--hole) 0 10px,transparent 10px 22px),linear-gradient(to right,var(--hole) 0 10px,transparent 10px 22px);
+    background-size:22px 8px,22px 8px;background-repeat:repeat-x;
+    background-position:6px 7px,6px calc(100% - 7px);
+  }
+  .strip ol{flex-direction:row}
+  .strip li{flex:0 0 84px}
+  .panel{border-left:0;border-top:1px solid var(--line)}
+  .loupe{width:150px;height:150px}
+  .toolbar .sep{display:none}
+  /* 좁은 화면: 고르는 동안 붙여넣기·선택 해제를 화면 아래에 띄움 (필름 스트립에서 멀리 내려가지 않게) */
+  .selinfo{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:5;margin:0;padding:8px 10px;background:var(--ink);color:var(--ink-text);border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+  .selinfo button{background:transparent;color:inherit;border-color:currentColor;padding:6px 10px}
+  body.selon{padding-bottom:64px}
+  body.selon .toast{bottom:calc(68px + env(safe-area-inset-bottom,0px))}
+}
+/* 손가락 조작: 슬라이더 손잡이를 키움 */
+@media (pointer: coarse){
+  input[type=range]{height:30px}
+  input[type=range]::-webkit-slider-thumb{width:16px;height:26px;margin-top:-12px}
+  input[type=range]::-moz-range-thumb{width:16px;height:26px}
+}
+[data-act=&quot;neg&quot;]{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body inert&gt;
+&lt;div class=&quot;app&quot;&gt;
+  &lt;header class=&quot;bar&quot;&gt;
+    &lt;div class=&quot;brand&quot;&gt;&lt;span class=&quot;chip&quot; id=&quot;brandChip&quot; title=&quot;현재 프레임의 필름 베이스 색&quot;&gt;&lt;/span&gt;&lt;span class=&quot;logo&quot;&gt;Posity&lt;/span&gt; &lt;small&gt;컬러 네거티브 → 포지티브&lt;/small&gt; &lt;span class=&quot;ver&quot; id=&quot;ver&quot; title=&quot;버전&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+    &lt;button id=&quot;btnOpen&quot; class=&quot;primary&quot;&gt;스캔 열기&lt;/button&gt;
+    &lt;input id=&quot;file&quot; type=&quot;file&quot; multiple accept=&quot;image/*,.tif,.tiff,.png,.dng&quot; class=&quot;sr&quot; tabindex=&quot;-1&quot;&gt;
+    &lt;label class=&quot;sr&quot; for=&quot;fmt&quot;&gt;내보내기 형식&lt;/label&gt;
+    &lt;select id=&quot;fmt&quot; disabled&gt;
+      &lt;option value=&quot;jpg&quot;&gt;JPEG (8비트)&lt;/option&gt;
+      &lt;option value=&quot;png8&quot;&gt;PNG (8비트)&lt;/option&gt;
+      &lt;option value=&quot;png16&quot;&gt;PNG (16비트)&lt;/option&gt;
+      &lt;option value=&quot;tif16&quot; title=&quot;16비트 TIFF: 무손실 압축(Deflate), sRGB 색 프로필 포함. 다른 편집 프로그램에서 더 손볼 때&quot;&gt;TIFF (16비트)&lt;/option&gt;
+    &lt;/select&gt;
+    &lt;label class=&quot;sr&quot; for=&quot;jq&quot;&gt;JPEG 품질&lt;/label&gt;
+    &lt;select id=&quot;jq&quot; disabled title=&quot;JPEG 품질: 높을수록 화질 손실이 적고 파일이 큼&quot;&gt;
+      &lt;option value=&quot;0.92&quot;&gt;품질 92&lt;/option&gt;
+      &lt;option value=&quot;0.95&quot; selected&gt;품질 95&lt;/option&gt;
+      &lt;option value=&quot;1&quot;&gt;품질 100&lt;/option&gt;
+    &lt;/select&gt;
+    &lt;button id=&quot;btnExport&quot; disabled&gt;내보내기&lt;/button&gt;
+    &lt;button id=&quot;btnExportAll&quot; disabled title=&quot;모든 프레임을 각자의 설정으로 변환해 ZIP 하나로 저장&quot;&gt;전체 ZIP&lt;/button&gt;
+    &lt;a class=&quot;hbtn&quot; id=&quot;btnHelp&quot; href=&quot;information.html#part-1&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot; title=&quot;사용법·원리·분석 정보 (? 키)&quot;&gt;도움말&lt;/a&gt;
+  &lt;/header&gt;
+
+  &lt;div class=&quot;work&quot;&gt;
+    &lt;nav class=&quot;strip&quot; aria-label=&quot;필름 스트립&quot;&gt;
+      &lt;ol id=&quot;frames&quot;&gt;&lt;li class=&quot;none&quot;&gt;불러온 프레임이 여기 필름처럼 쌓입니다.&lt;/li&gt;&lt;/ol&gt;
+    &lt;/nav&gt;
+
+    &lt;section class=&quot;stage&quot;&gt;
+      &lt;div class=&quot;toolbar&quot; role=&quot;toolbar&quot; aria-label=&quot;이미지 도구&quot;&gt;
+        &lt;button id=&quot;btnUndo&quot; type=&quot;button&quot; aria-label=&quot;되돌리기&quot; disabled&gt;&lt;span aria-hidden=&quot;true&quot;&gt;↶&lt;/span&gt;&lt;span class=&quot;tl&quot; aria-hidden=&quot;true&quot;&gt; 되돌리기&lt;/span&gt;&lt;/button&gt;
+        &lt;button id=&quot;btnRedo&quot; type=&quot;button&quot; aria-label=&quot;다시 하기&quot; disabled&gt;&lt;span aria-hidden=&quot;true&quot;&gt;↷&lt;/span&gt;&lt;span class=&quot;tl&quot; aria-hidden=&quot;true&quot;&gt; 다시 하기&lt;/span&gt;&lt;/button&gt;
+        &lt;span class=&quot;sep&quot;&gt;&lt;/span&gt;
+        &lt;button data-act=&quot;rotL&quot; title=&quot;반시계 방향 90° 회전&quot; disabled&gt;↺ 90°&lt;/button&gt;
+        &lt;button data-act=&quot;rotR&quot; title=&quot;시계 방향 90° 회전&quot; disabled&gt;↻ 90°&lt;/button&gt;
+        &lt;button data-act=&quot;flip&quot; title=&quot;좌우 반전 (유제면 방향 보정)&quot; disabled&gt;좌우 반전&lt;/button&gt;
+        &lt;span class=&quot;sep&quot;&gt;&lt;/span&gt;
+        &lt;button data-act=&quot;crop&quot; aria-pressed=&quot;false&quot; title=&quot;자르기와 기울기(필름 수평 맞추기)&quot; disabled&gt;자르기&lt;/button&gt;
+        &lt;select id=&quot;ratio&quot; hidden aria-label=&quot;자르기 비율&quot;&gt;
+          &lt;option value=&quot;free&quot;&gt;자유 비율&lt;/option&gt;
+          &lt;option value=&quot;1.5&quot;&gt;3:2 (135, 6×9)&lt;/option&gt;
+          &lt;option value=&quot;1.3333&quot;&gt;4:3 (6×4.5)&lt;/option&gt;
+          &lt;option value=&quot;1&quot;&gt;1:1 (6×6)&lt;/option&gt;
+          &lt;option value=&quot;1.25&quot;&gt;5:4 (6×7)&lt;/option&gt;
+          &lt;option value=&quot;2.7083&quot;&gt;65:24 (파노라마)&lt;/option&gt;
+        &lt;/select&gt;
+        &lt;button data-act=&quot;cropAuto&quot; hidden title=&quot;홀더와 프레임 사이 베이스를 걷어내고 화상 영역에 맞춤&quot;&gt;자동 맞춤&lt;/button&gt;
+        &lt;button data-act=&quot;cropClear&quot; hidden&gt;자르기 해제&lt;/button&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;angle&quot; hidden&gt;&lt;/div&gt;
+        &lt;button data-act=&quot;level&quot; title=&quot;비뚤게 놓여 스캔된 필름을 필름 테두리·프레임 경계에 맞춰 반듯하게 세움. 필름 가장자리를 찾지 못하면 기울기는 그대로 두고 선 긋기로 바뀜&quot; hidden disabled&gt;수평 맞추기&lt;/button&gt;
+        &lt;button data-act=&quot;line&quot; aria-pressed=&quot;false&quot; aria-label=&quot;선 긋기로 수평 맞추기&quot; title=&quot;필름 테두리나 프레임 경계를 따라 선을 그으면 그 테두리가 반듯해지도록 기울기를 맞춤 (가로선은 수평, 세로선은 수직으로)&quot; hidden disabled&gt;선 긋기&lt;/button&gt;
+        &lt;button data-act=&quot;cropDone&quot; hidden class=&quot;primary&quot;&gt;완료&lt;/button&gt;
+        &lt;span class=&quot;sep&quot;&gt;&lt;/span&gt;
+        &lt;button data-act=&quot;base&quot; aria-pressed=&quot;false&quot; title=&quot;필름 베이스(프레임 사이 노출되지 않은 부분) 찍기&quot; disabled&gt;베이스 찍기&lt;/button&gt;
+        &lt;button data-act=&quot;gray&quot; aria-pressed=&quot;false&quot; title=&quot;무채색이어야 할 곳을 찍어 색 균형 맞추기&quot; disabled&gt;회색 찍기&lt;/button&gt;
+        &lt;span class=&quot;sep&quot;&gt;&lt;/span&gt;
+        &lt;button data-act=&quot;neg&quot; title=&quot;누르고 있는 동안 원본 네거티브 표시 (N 키)&quot; disabled&gt;원본 보기&lt;/button&gt;
+        &lt;button data-act=&quot;loupe&quot; aria-pressed=&quot;false&quot; title=&quot;원본 해상도로 확대해 선명도·그레인 확인&quot; disabled&gt;1:1 확대경&lt;/button&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;viewer&quot; id=&quot;viewer&quot;&gt;
+        &lt;canvas id=&quot;view&quot; hidden&gt;&lt;/canvas&gt;
+        &lt;div class=&quot;empty&quot; id=&quot;empty&quot;&gt;
+          &lt;strong&gt;네거티브 스캔을 끌어다 놓으세요&lt;/strong&gt;
+          &lt;p&gt;TIFF 8·16비트(무압축, LZW, Deflate, PackBits), JPEG, PNG(16비트 포함), DNG. 여러 장을 한 번에 넣으면 필름 스트립에 순서대로 들어갑니다.&lt;/p&gt;
+          &lt;button id=&quot;btnOpen2&quot;&gt;파일 선택&lt;/button&gt;
+          &lt;p class=&quot;help&quot;&gt;처음이라면 &lt;a href=&quot;information.html#s1-1&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;도움말&lt;/a&gt;을 먼저 보세요.&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;loupe&quot; id=&quot;loupe&quot; hidden&gt;&lt;canvas id=&quot;loupeCv&quot; width=&quot;220&quot; height=&quot;220&quot;&gt;&lt;/canvas&gt;&lt;b&gt;1:1&lt;/b&gt;&lt;/div&gt;
+        &lt;div class=&quot;busy&quot; id=&quot;busy&quot; hidden&gt;
+          &lt;div class=&quot;bt&quot; id=&quot;busyT&quot;&gt;처리 중&lt;/div&gt;
+          &lt;div class=&quot;bd&quot; id=&quot;busyD&quot;&gt;&lt;/div&gt;
+          &lt;div class=&quot;track&quot;&gt;&lt;div class=&quot;fill&quot; id=&quot;busyF&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+          &lt;button id=&quot;busyCancel&quot; type=&quot;button&quot; hidden&gt;취소&lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;status&quot;&gt;&lt;span id=&quot;stInfo&quot;&gt;파일 없음&lt;/span&gt;&lt;span id=&quot;stHint&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;aside class=&quot;panel&quot; aria-label=&quot;변환 설정&quot;&gt;
+      &lt;div class=&quot;aibox&quot;&gt;
+        &lt;label class=&quot;aisw&quot; id=&quot;aiSw&quot; title=&quot;장면을 인식하여 사진을 찍은 상황에 가장 근접하게 포지티브로 변환하고, 맑고 깨끗하게 보정합니다. 모든 장면에 적용을 보장하지 않습니다. 제대로 적용되지 않는다면 이 기능을 끄세요. &quot;&gt;
+          &lt;input type=&quot;checkbox&quot; id=&quot;aiOn&quot; aria-describedby=&quot;aiDesc&quot;&gt;
+          &lt;span class=&quot;sw&quot; aria-hidden=&quot;true&quot;&gt;&lt;/span&gt;
+          &lt;b&gt;Ai+&lt;/b&gt;
+          &lt;span class=&quot;aist&quot; id=&quot;aiState&quot;&gt;꺼짐 · 기존 방식&lt;/span&gt;
+        &lt;/label&gt;
+        &lt;span class=&quot;sr&quot; id=&quot;aiDesc&quot;&gt;장면을 인식하여 사진을 찍은 상황에 가장 근접하게 포지티브로 변환하고, 맑고 깨끗하게 보정합니다. 모든 장면에 적용을 보장하지 않습니다. 제대로 적용되지 않는다면 이 기능을 끄세요. &lt;/span&gt;
+        &lt;div class=&quot;aiinfo&quot; id=&quot;aiInfo&quot; hidden&gt;
+          &lt;span class=&quot;aiscene&quot; id=&quot;aiScene&quot;&gt;&lt;/span&gt;
+          &lt;label class=&quot;aiskip&quot;&gt;&lt;input type=&quot;checkbox&quot; id=&quot;aiSkip&quot; disabled&gt; 이 프레임만 기존 방식으로&lt;/label&gt;
+          &lt;p class=&quot;note&quot; id=&quot;aiNote&quot; hidden&gt;슬라이더는 Ai+ 결과에 더하거나 빼는 미세 조정입니다. 모두 0이면 Ai+ 그대로입니다.&lt;/p&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div class=&quot;hist&quot;&gt;&lt;canvas id=&quot;hist&quot;&gt;&lt;/canvas&gt;&lt;/div&gt;
+
+      &lt;details class=&quot;sec&quot; open&gt;
+        &lt;summary&gt;필름 베이스&lt;/summary&gt;
+        &lt;div class=&quot;base&quot;&gt;
+          &lt;div class=&quot;sw&quot; id=&quot;baseSw&quot;&gt;&lt;/div&gt;
+          &lt;div class=&quot;v&quot;&gt;&lt;span id=&quot;baseVal&quot;&gt;—&lt;/span&gt;&lt;br&gt;&lt;em id=&quot;baseSrc&quot;&gt;스캔을 열면 자동 감지합니다&lt;/em&gt;&lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;row&quot;&gt;
+          &lt;button data-act=&quot;base&quot; aria-pressed=&quot;false&quot; disabled&gt;스포이트로 지정&lt;/button&gt;
+          &lt;button id=&quot;btnBaseAuto&quot; disabled&gt;자동 감지로&lt;/button&gt;
+        &lt;/div&gt;
+        &lt;label class=&quot;field&quot;&gt;&lt;span&gt;스캔 인코딩&lt;/span&gt;
+          &lt;select id=&quot;selInput&quot; disabled aria-describedby=&quot;encNote&quot; title=&quot;파일 정보(ICC 프로필·PNG 색 정보·DNG)와 같은 인코딩을 고르면 자동으로 봅니다. 정보가 없는 파일은 sRGB가 자동입니다. 설정 붙여넣기와 모든 프레임에 적용은 직접 고른 인코딩만 옮기고, 자동이면 대상 프레임은 자기 파일 정보로 정한 인코딩을 씁니다.&quot;&gt;
+            &lt;option value=&quot;srgb&quot;&gt;sRGB 감마 (스캐너 JPEG·TIFF 대부분)&lt;/option&gt;
+            &lt;option value=&quot;linear&quot;&gt;선형 (DNG, RAW에서 뽑은 선형 TIFF)&lt;/option&gt;
+            &lt;option value=&quot;g22&quot;&gt;감마 2.2&lt;/option&gt;
+            &lt;option value=&quot;g18&quot;&gt;감마 1.8 (ProPhoto RGB 등)&lt;/option&gt;
+          &lt;/select&gt;
+        &lt;/label&gt;
+        &lt;p class=&quot;note&quot; id=&quot;encNote&quot; hidden&gt;&lt;/p&gt;
+        &lt;label class=&quot;field&quot;&gt;&lt;span&gt;검은점 기준&lt;/span&gt;
+          &lt;select id=&quot;selBlack&quot; disabled&gt;
+            &lt;option value=&quot;pct&quot;&gt;자동 (그림자 백분위)&lt;/option&gt;
+            &lt;option value=&quot;base&quot;&gt;필름 베이스 (무노광 = 검정)&lt;/option&gt;
+          &lt;/select&gt;
+        &lt;/label&gt;
+        &lt;label class=&quot;field&quot;&gt;&lt;span&gt;채널 정규화&lt;/span&gt;
+          &lt;select id=&quot;selChan&quot; disabled&gt;
+            &lt;option value=&quot;per&quot;&gt;채널별 (층별 감마 차이 자동 보정)&lt;/option&gt;
+            &lt;option value=&quot;linked&quot;&gt;연동 (필름 고유 발색 유지)&lt;/option&gt;
+          &lt;/select&gt;
+        &lt;/label&gt;
+        &lt;div class=&quot;dens&quot; id=&quot;dens&quot; hidden&gt;
+          &lt;span&gt;밀도 범위&lt;/span&gt;&lt;b id=&quot;densRGB&quot;&gt;—&lt;/b&gt;
+          &lt;span&gt;장면 범위&lt;/span&gt;&lt;b id=&quot;densStops&quot;&gt;—&lt;/b&gt;
+          &lt;span id=&quot;exclL&quot; hidden&gt;분석 제외&lt;/span&gt;&lt;b id=&quot;excl&quot; hidden&gt;—&lt;/b&gt;
+        &lt;/div&gt;
+        &lt;p class=&quot;note&quot; id=&quot;baseNote&quot; hidden&gt;지금 모드(자동 검은점, 채널별)에서는 베이스 값이 정규화로 상쇄되어 톤·색에는 영향을 주지 않고, 홀더·빛샘을 가려내는 데만 쓰입니다. 베이스를 찍으면 검은점 기준이 필름 베이스로 바뀝니다.&lt;/p&gt;
+      &lt;/details&gt;
+
+      &lt;details class=&quot;sec&quot; open&gt;
+        &lt;summary&gt;톤&lt;/summary&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;exposure&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;contrast&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;black&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;white&quot;&gt;&lt;/div&gt;
+      &lt;/details&gt;
+
+      &lt;details class=&quot;sec&quot; open&gt;
+        &lt;summary&gt;색&lt;/summary&gt;
+        &lt;div class=&quot;ctl temp&quot; data-s=&quot;temp&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl tint&quot; data-s=&quot;tint&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;sat&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;row&quot;&gt;&lt;button data-act=&quot;gray&quot; aria-pressed=&quot;false&quot; disabled&gt;회색 스포이트&lt;/button&gt;&lt;/div&gt;
+      &lt;/details&gt;
+
+      &lt;details class=&quot;sec&quot;&gt;
+        &lt;summary&gt;선명도&lt;/summary&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;sharpAmt&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;sharpRad&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;sharpThr&quot;&gt;&lt;/div&gt;
+        &lt;p class=&quot;note&quot;&gt;미리보기는 축소본이라 선명도는 1:1 확대경에서 확인하세요. 임계값을 올리면 필름 그레인이 덜 강조됩니다.&lt;/p&gt;
+      &lt;/details&gt;
+
+      &lt;details class=&quot;sec&quot;&gt;
+        &lt;summary&gt;자동 분석&lt;/summary&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;clipBlack&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;clipWhite&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;ctl&quot; data-s=&quot;margin&quot;&gt;&lt;/div&gt;
+        &lt;p class=&quot;note&quot;&gt;자르기 영역에서 테두리 여백을 뺀 부분으로 채널별 그림자·하이라이트 밀도를 찾습니다. 홀더나 빛샘이 들어가면 여백을 늘리세요.&lt;/p&gt;
+      &lt;/details&gt;
+
+      &lt;details class=&quot;sec how&quot;&gt;
+        &lt;summary&gt;변환 원리&lt;/summary&gt;
+        &lt;ol&gt;
+          &lt;li&gt;스캔값을 인코딩에 맞춰 선형 투과율 T로 되돌립니다.&lt;/li&gt;
+          &lt;li&gt;필름 베이스 T&lt;sub&gt;b&lt;/sub&gt;로 나눠 오렌지 마스크를 걷어내고 밀도 D = −log₁₀(T/T&lt;sub&gt;b&lt;/sub&gt;)로 바꿉니다.&lt;/li&gt;
+          &lt;li&gt;채널마다 그림자·하이라이트 밀도를 0–1로 정규화합니다. 감광층마다 다른 감마가 여기서 맞춰집니다.&lt;/li&gt;
+          &lt;li&gt;노출·색온도·색조는 채널별 인화 노출(로그 영역)에 더해집니다. 확대기의 CMY 필터와 같은 원리입니다.&lt;/li&gt;
+          &lt;li&gt;가상 인화지의 S자 특성곡선(최대 농도 2.4)으로 반사율을 만든 뒤 채도·선명도를 거쳐 sRGB로 인코딩합니다.&lt;/li&gt;
+        &lt;/ol&gt;
+        &lt;p class=&quot;more&quot;&gt;&lt;a href=&quot;information.html#part-2&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;도움말에서 자세히 보기&lt;/a&gt;&lt;/p&gt;
+      &lt;/details&gt;
+
+      &lt;details class=&quot;sec how&quot;&gt;
+        &lt;summary&gt;Ai+ 원리&lt;/summary&gt;
+        &lt;ol&gt;
+          &lt;li&gt;기존 방식의 필름 해석(베이스 제거, 채널별 정규화)은 그대로 쓰고, 마지막 가상 인화지 대신 디지털카메라처럼 렌더링합니다. 인화지 곡선은 채널마다 걸려 하늘 같은 밝은 색은 바래고 그림자 색은 짙어지기 때문입니다.&lt;/li&gt;
+          &lt;li&gt;화이트밸런스: 밝기 구간마다 &#x27;무채색일 법한 곳&#x27;이 모이는 색을 찾고, 여러 구간이 매끄럽게 이어지는 색 틀어짐만 실제 캐스트로 인정해 밝기별로 뺍니다. 필름 층마다 특성곡선 모양이 달라 양 끝은 맞아도 중간 톤만 초록·마젠타로 남는 크로스오버까지 잡습니다. 하늘·나무 같은 큰 단색 면이 후보를 독차지하지 못하게 칸마다 표를 제한하고, 장면 전체의 평균색이 같은 방향일 때만 그만큼 믿습니다. 실내등·노을의 따뜻함은 카메라 자동 화이트밸런스처럼 조금 남깁니다.&lt;/li&gt;
+          &lt;li&gt;밝기: 중앙을 더 보고 하늘처럼 훨씬 밝은 곳은 가볍게 보는 측광으로 중간 밝기를 맞춥니다. 보통 장면은 모두 같은 밝기로, 눈밭·야경처럼 분명히 밝거나 어두운 장면만 그 분위기를 따릅니다.&lt;/li&gt;
+          &lt;li&gt;톤: 밝기(휘도)에 S자 곡선을 걸고 세 채널을 같은 비율로 바꿔 하늘·피부 색은 그대로 두면서 깊은 검정, 깨끗한 흰색, 또렷한 대비를 줍니다. 색역을 넘는 밝고 선명한 색은 밝기와 색을 반씩 지키며 줄여 파란 하늘이 바래지 않게 하고, 안개처럼 뜬 그림자는 걷어 냅니다.&lt;/li&gt;
+          &lt;li&gt;색: 흐린 색일수록 더 살리는 바이브런스와 채도 평준화로 조금 높은 정도의 채도를 맞춥니다. 피부색은 아끼고, 거의 회색인 곳은 올리지 않아 흰색·회색이 깨끗하게 남으며, 색역을 넘지 않게 합니다.&lt;/li&gt;
+          &lt;li&gt;맑게: 중간 크기 세부를 키우고, 필름 그레인을 재서 색 얼룩 잡음은 거의 없애고 밝기 그레인은 디지털 사진처럼 평탄한 면에서 매끈하게 줄이되 4분의 1은 남깁니다. 선명화는 남은 잡음보다 큰 윤곽에만 겁니다.&lt;/li&gt;
+        &lt;/ol&gt;
+        &lt;p class=&quot;more&quot;&gt;&lt;a href=&quot;information.html#s1-3&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;도움말에서 자세히 보기&lt;/a&gt;&lt;/p&gt;
+      &lt;/details&gt;
+
+      &lt;div class=&quot;foot&quot;&gt;
+        &lt;button id=&quot;btnReset&quot; disabled title=&quot;보정값만 기본으로. 방향·기울기·자르기는 그대로 (알림의 &amp;#x27;모두 처음으로&amp;#x27;로 그것까지 되돌림)&quot;&gt;보정 초기화&lt;/button&gt;
+        &lt;button id=&quot;btnSync&quot; disabled title=&quot;자르기·기울기를 뺀 현재 설정을 모든 프레임에 복사&quot;&gt;모든 프레임에 적용&lt;/button&gt;
+        &lt;button id=&quot;btnCopy&quot; type=&quot;button&quot; disabled&gt;설정 복사&lt;/button&gt;
+        &lt;button id=&quot;btnPaste&quot; type=&quot;button&quot; disabled&gt;설정 붙여넣기&lt;/button&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;selinfo&quot; id=&quot;selInfo&quot; role=&quot;group&quot; aria-label=&quot;고른 프레임&quot; hidden&gt;&lt;span id=&quot;selText&quot;&gt;&lt;/span&gt;&lt;button id=&quot;btnSelPaste&quot; type=&quot;button&quot;&gt;붙여넣기&lt;/button&gt;&lt;button id=&quot;btnSelClear&quot; type=&quot;button&quot; title=&quot;고른 프레임을 모두 풂 (Esc)&quot;&gt;선택 해제&lt;/button&gt;&lt;/div&gt;
+    &lt;/aside&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&quot;toast&quot; id=&quot;toast&quot; role=&quot;status&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;
+
+
+&lt;/body&gt;
+&lt;/html&gt;
+</template>
+<!-- /Velvitty UI snapshot -->
 <script data-velvitty-launch data-app="./posity.html">
 (() => {
   'use strict';
@@ -18,7 +475,7 @@
   const source = document.currentScript.dataset.app;
   const host = document.createElement('velvitty-launch');
   const root = host.attachShadow({mode: 'open'});
-  root.innerHTML = "<style>:host{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;align-items:safe center;overflow:auto;box-sizing:border-box;padding:28px;background:var(--app-ui-background,#181818);color:#fff;font:16px/1.7 system-ui,-apple-system,\"Noto Sans KR\",sans-serif;text-align:center;isolation:isolate}\n*{box-sizing:border-box}.app-backdrop{position:fixed;inset:-5px;z-index:-2;width:calc(100% + 10px);height:calc(100% + 10px);border:0;pointer-events:none;opacity:.84;filter:none;background:transparent}.scene{position:fixed;inset:0;z-index:-1;background:transparent;backdrop-filter:blur(1.8px);-webkit-backdrop-filter:blur(1.8px);pointer-events:none}\n.glass{--lens-radius:32px;position:relative;isolation:isolate;width:min(620px,100%);padding:38px 42px 34px;border:1px solid #ffffff1a;border-radius:var(--lens-radius);background:rgb(var(--glass-rgb,255 255 255)/var(--glass-alpha,.075));backdrop-filter:blur(8.5px);-webkit-backdrop-filter:blur(8.5px);box-shadow:0 36px 88px -22px rgb(0 0 0/var(--glass-shadow-opacity,.34)),0 12px 32px -10px #0000002e,0 2px 8px -3px #0000001a,inset 0 1px 2px #ffffff30,inset 0 -1px 2px #ffffff12;pointer-events:none;filter:none;opacity:1}.lens-clip{position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none}.lens-optics{position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none;background:transparent;filter:none}.lens-copy{position:absolute;display:block;max-width:none;margin:0;padding:0;border:0;pointer-events:none;opacity:calc(1 - var(--glass-alpha,.075));background:transparent;filter:none}.glass:before{content:\"\";position:absolute;z-index:2;inset:0;padding:1px;border-radius:inherit;pointer-events:none;background:conic-gradient(from 142deg at 50% 50%,transparent 0deg,#ff9d7f88 9deg,#ffd17377 19deg,#a8edc777 29deg,#88dcff88 39deg,#aeb4ff88 49deg,#e0acff77 59deg,transparent 78deg,transparent 175deg,#e0acff66 190deg,#88dcff77 205deg,#a8edc766 217deg,#ffd17366 229deg,#ff9d7f66 241deg,transparent 260deg,transparent 360deg);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude}.glass:after{content:\"\";position:absolute;z-index:2;inset:-4px -3px -7px;border-radius:calc(var(--lens-radius) + 4px);border:1px solid #ffffff0d;box-shadow:inset 0 -2px 3px #ffffff0d;pointer-events:none}.brand{position:relative;z-index:3;margin:0 0 28px;color:#f4f4f4;font-size:13px;font-weight:500;letter-spacing:.04em;overflow-wrap:anywhere;text-shadow:0 1px 4px #0007}.symbol{position:relative;z-index:3;display:grid;place-items:center;width:72px;height:72px;margin:0 auto 26px;border:1px solid #ffffff35;border-radius:22px;background:linear-gradient(135deg,#ffffff14,#ffffff02);box-shadow:inset 0 1px 1px #ffffff70,inset 0 -2px 2px #ffffff20,0 3px 7px #0002;color:#fff}.symbol svg{width:32px;height:32px}.primary{position:relative;z-index:3;margin:0;font-size:clamp(18px,2.8vw,23px);line-height:1.75;font-weight:600;letter-spacing:-.04em;word-break:keep-all;overflow-wrap:anywhere;text-shadow:0 1px 5px #0008}.secondary{position:relative;z-index:3;margin:20px 0 29px;color:#f1f1f1;font-size:15px;line-height:1.75;word-break:keep-all;text-shadow:0 1px 4px #0007}.retry-note{position:relative;z-index:3;margin:27px 0 0;color:#e5e5e5;font-size:12px;line-height:1.8;word-break:keep-all;letter-spacing:-.02em;text-shadow:0 1px 3px #0006}.retry-surface{position:fixed;inset:0;z-index:5;width:100%;height:100%;margin:0;padding:0;border:0;background:transparent;cursor:pointer;outline:none}.retry-surface:focus-visible~.glass{outline:3px solid #fff;outline-offset:10px}\n@media(max-width:540px){:host{padding:20px}.glass{padding:28px 23px}.brand{margin-bottom:25px}.symbol{width:64px;height:64px;margin-bottom:23px}.secondary{font-size:14px;margin-top:17px;margin-bottom:25px}}\n\n.glass{--lens-ink:#fff;--lens-muted:#ededed}.glass[data-surface=\"light\"]{--lens-ink:#171717;--lens-muted:#444}.glass :is(.brand,.primary,.symbol){color:var(--lens-ink)}.glass :is(.secondary,.retry-note){color:var(--lens-muted)}.glass[data-surface=\"light\"] :is(.brand,.primary,.secondary,.retry-note){text-shadow:none}\n\n[hidden]{display:none!important}\n:host([data-page-visible]){background:transparent}\n.loading-meter{display:grid;grid-template-columns:1fr 3.5em;align-items:center;gap:12px;margin-top:26px}\nprogress{appearance:none;width:100%;height:7px;overflow:hidden;border:0;border-radius:999px;background:#ffffff24;color:#e7edf7}\nprogress::-webkit-progress-bar{background:transparent}\nprogress::-webkit-progress-value{border-radius:inherit;background:currentColor}\nprogress::-moz-progress-bar{border-radius:inherit;background:currentColor}\n.glass[data-surface=\"light\"] progress{background:#1b202222;color:#434b54}\n.percent{font-size:13px;font-variant-numeric:tabular-nums;color:var(--lens-muted);text-align:right}\n</style><iframe class=\"app-backdrop\" title=\"\" sandbox=\"allow-same-origin\" tabindex=\"-1\" inert aria-hidden=\"true\"></iframe>\n<div class=\"scene\" aria-hidden=\"true\"></div>\n<button class=\"retry-surface\" type=\"button\" aria-label=\"연결을 다시 시도하려면 화면을 아무 곳이나 누르세요.\" hidden></button>\n<main class=\"glass\">\n  <p class=\"primary\" role=\"status\">어플리케이션이 실행 중 입니다. 잠시만 기다려 주세요.</p>\n  <p class=\"secondary\" hidden>네트워크 환경을 확인해 주세요.</p>\n  <div class=\"loading-meter\"><progress aria-label=\"앱 실행 진행률\" max=\"100\" value=\"0\">0%</progress><span class=\"percent\" aria-hidden=\"true\">0%</span></div>\n  <p class=\"retry-note\" hidden>연결을 다시 시도하려면 화면을 아무 곳이나 누르세요.</p>\n</main>";
+  root.innerHTML = "<style>:host{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;align-items:safe center;overflow:auto;box-sizing:border-box;padding:28px;background:var(--app-ui-background,#181818);color:#fff;font:16px/1.7 system-ui,-apple-system,\"Noto Sans KR\",sans-serif;text-align:center;isolation:isolate}\n*{box-sizing:border-box}.app-backdrop{position:fixed;inset:-5px;z-index:0;width:calc(100% + 10px);height:calc(100% + 10px);border:0;pointer-events:none;opacity:.84;filter:none;background:transparent}.scene{position:fixed;inset:0;z-index:1;background:transparent;backdrop-filter:blur(1.8px);-webkit-backdrop-filter:blur(1.8px);pointer-events:none}\n.glass{--lens-radius:32px;position:relative;z-index:2;isolation:isolate;width:min(620px,100%);padding:38px 42px 34px;border:1px solid #ffffff1a;border-radius:var(--lens-radius);background:rgb(var(--glass-rgb,255 255 255)/var(--glass-alpha,.075));backdrop-filter:blur(8.5px);-webkit-backdrop-filter:blur(8.5px);box-shadow:0 36px 88px -22px rgb(0 0 0/var(--glass-shadow-opacity,.34)),0 12px 32px -10px #0000002e,0 2px 8px -3px #0000001a,inset 0 1px 2px #ffffff30,inset 0 -1px 2px #ffffff12;pointer-events:none;filter:none;opacity:1}.lens-clip{position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none}.lens-optics{position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none;background:transparent;filter:none}.lens-copy{position:absolute;display:block;max-width:none;margin:0;padding:0;border:0;pointer-events:none;opacity:calc(1 - var(--glass-alpha,.075));background:transparent;filter:none}.glass:before{content:\"\";position:absolute;z-index:2;inset:0;padding:1px;border-radius:inherit;pointer-events:none;background:conic-gradient(from 142deg at 50% 50%,transparent 0deg,#ff9d7f88 9deg,#ffd17377 19deg,#a8edc777 29deg,#88dcff88 39deg,#aeb4ff88 49deg,#e0acff77 59deg,transparent 78deg,transparent 175deg,#e0acff66 190deg,#88dcff77 205deg,#a8edc766 217deg,#ffd17366 229deg,#ff9d7f66 241deg,transparent 260deg,transparent 360deg);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude}.glass:after{content:\"\";position:absolute;z-index:2;inset:-4px -3px -7px;border-radius:calc(var(--lens-radius) + 4px);border:1px solid #ffffff0d;box-shadow:inset 0 -2px 3px #ffffff0d;pointer-events:none}.brand{position:relative;z-index:3;margin:0 0 28px;color:#f4f4f4;font-size:13px;font-weight:500;letter-spacing:.04em;overflow-wrap:anywhere;text-shadow:0 1px 4px #0007}.symbol{position:relative;z-index:3;display:grid;place-items:center;width:72px;height:72px;margin:0 auto 26px;border:1px solid #ffffff35;border-radius:22px;background:linear-gradient(135deg,#ffffff14,#ffffff02);box-shadow:inset 0 1px 1px #ffffff70,inset 0 -2px 2px #ffffff20,0 3px 7px #0002;color:#fff}.symbol svg{width:32px;height:32px}.primary{position:relative;z-index:3;margin:0;font-size:clamp(18px,2.8vw,23px);line-height:1.75;font-weight:600;letter-spacing:-.04em;word-break:keep-all;overflow-wrap:anywhere;text-shadow:0 1px 5px #0008}.secondary{position:relative;z-index:3;margin:20px 0 29px;color:#f1f1f1;font-size:15px;line-height:1.75;word-break:keep-all;text-shadow:0 1px 4px #0007}.retry-note{position:relative;z-index:3;margin:27px 0 0;color:#e5e5e5;font-size:12px;line-height:1.8;word-break:keep-all;letter-spacing:-.02em;text-shadow:0 1px 3px #0006}.retry-surface{position:fixed;inset:0;z-index:5;width:100%;height:100%;margin:0;padding:0;border:0;background:transparent;cursor:pointer;outline:none}.retry-surface:focus-visible~.glass{outline:3px solid #fff;outline-offset:10px}\n@media(max-width:540px){:host{padding:20px}.glass{padding:28px 23px}.brand{margin-bottom:25px}.symbol{width:64px;height:64px;margin-bottom:23px}.secondary{font-size:14px;margin-top:17px;margin-bottom:25px}}\n\n.glass{--lens-ink:#fff;--lens-muted:#ededed}.glass[data-surface=\"light\"]{--lens-ink:#171717;--lens-muted:#444}.glass :is(.brand,.primary,.symbol){color:var(--lens-ink)}.glass :is(.secondary,.retry-note){color:var(--lens-muted)}.glass[data-surface=\"light\"] :is(.brand,.primary,.secondary,.retry-note){text-shadow:none}\n\n[hidden]{display:none!important}\n:host([data-page-visible]){background:transparent}\n.loading-meter{display:grid;grid-template-columns:1fr 3.5em;align-items:center;gap:12px;margin-top:26px}\nprogress{appearance:none;width:100%;height:7px;overflow:hidden;border:0;border-radius:999px;background:#ffffff24;color:#e7edf7}\nprogress::-webkit-progress-bar{background:transparent}\nprogress::-webkit-progress-value{border-radius:inherit;background:currentColor}\nprogress::-moz-progress-bar{border-radius:inherit;background:currentColor}\n.glass[data-surface=\"light\"] progress{background:#1b202222;color:#434b54}\n.percent{font-size:13px;font-variant-numeric:tabular-nums;color:var(--lens-muted);text-align:right}\n</style><iframe class=\"app-backdrop\" title=\"\" sandbox=\"allow-same-origin\" tabindex=\"-1\" inert aria-hidden=\"true\"></iframe>\n<div class=\"scene\" aria-hidden=\"true\"></div>\n<button class=\"retry-surface\" type=\"button\" aria-label=\"연결을 다시 시도하려면 화면을 아무 곳이나 누르세요.\" hidden></button>\n<main class=\"glass\">\n  <p class=\"primary\" role=\"status\">어플리케이션이 실행 중 입니다. 잠시만 기다려 주세요.</p>\n  <p class=\"secondary\" hidden>네트워크 환경을 확인해 주세요.</p>\n  <div class=\"loading-meter\"><progress aria-label=\"앱 실행 진행률\" max=\"100\" value=\"0\">0%</progress><span class=\"percent\" aria-hidden=\"true\">0%</span></div>\n  <p class=\"retry-note\" hidden>연결을 다시 시도하려면 화면을 아무 곳이나 누르세요.</p>\n</main>";
   document.documentElement.append(host);
 
   const glass = root.querySelector('.glass');
@@ -30,6 +487,8 @@
   const progress = root.querySelector('progress');
   const percent = root.querySelector('.percent');
   const backdrop = root.querySelector('.app-backdrop');
+  const fallback = document.getElementById('velvitty-ui-fallback');
+  if (fallback) backdrop.srcdoc = fallback.content.textContent;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let frame;
   let ready = false;
